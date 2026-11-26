@@ -1,0 +1,370 @@
+{
+  "entities": {
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted administrator lookup document keyed by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "role": { "type": "string", "enum": ["Developer", "Company Owner"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role", "createdAt"]
+    },
+    "DirectoryEntry": {
+      "title": "DirectoryEntry",
+      "description": "Non-PII organizational directory entry for an employee used in workflows, KPIs, and attendance.",
+      "type": "object",
+      "properties": {
+        "empId": { "type": "string", "minLength": 3, "maxLength": 32, "pattern": "^[a-z0-9._]{3,20}$" },
+        "docId": { "type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "role": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "branch": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "location": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "designation": { "type": "string", "maxLength": 100 },
+        "joinedAt": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", "maxLength": 10 },
+        "photoUrl": { "type": "string", "maxLength": 300000 },
+        "active": { "type": "boolean" },
+        "authUid": { "type": "string", "maxLength": 128 },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["empId", "docId", "name", "role", "branch", "location", "designation", "joinedAt", "photoUrl", "active", "authUid", "orgId", "createdAt", "updatedAt"]
+    },
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Private PII and credential hash record for a user, isolated from directory reads.",
+      "type": "object",
+      "properties": {
+        "empId": { "type": "string", "minLength": 3, "maxLength": 32, "pattern": "^[a-z0-9._]{3,20}$" },
+        "docId": { "type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authUid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 200 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "passwordHash": { "type": "string", "minLength": 16, "maxLength": 128 },
+        "passwordSalt": { "type": "string", "minLength": 8, "maxLength": 64 },
+        "twoStepEnabled": { "type": "boolean" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["empId", "docId", "authUid", "email", "phone", "passwordHash", "passwordSalt", "twoStepEnabled", "active", "createdAt", "updatedAt"]
+    },
+    "RoleDefinition": {
+      "title": "RoleDefinition",
+      "description": "RBAC role definition with branch scope, location scope, and permission flags.",
+      "type": "object",
+      "properties": {
+        "roleId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "branchScope": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "locationScope": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "permissions": { "type": "array", "description": "Permission indices 0..8 (max 9 items)" },
+        "builtin": { "type": "boolean" },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["roleId", "name", "branchScope", "locationScope", "permissions", "builtin", "orgId", "createdAt", "updatedAt"]
+    },
+    "Branch": {
+      "title": "Branch",
+      "description": "Organizational department or branch.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "code": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "active": { "type": "boolean" },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "code", "active", "orgId", "createdAt"]
+    },
+    "Location": {
+      "title": "Location",
+      "description": "Physical office or plant location.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "code": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "active": { "type": "boolean" },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "code", "active", "orgId", "createdAt"]
+    },
+    "WorkflowPath": {
+      "title": "WorkflowPath",
+      "description": "Reusable multi-stage process path template.",
+      "type": "object",
+      "properties": {
+        "pathId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "stages": { "type": "array", "description": "Ordered stage assignees or groups (max 12)" },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "createdBy": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["pathId", "name", "stages", "orgId", "createdBy", "createdAt", "updatedAt"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Operational workflow task moving across sequential approval stages.",
+      "type": "object",
+      "properties": {
+        "taskId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "branch": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "location": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "priority": { "type": "string", "enum": ["Low", "Medium", "High"] },
+        "pathId": { "type": "string", "maxLength": 64 },
+        "path": { "type": "array", "description": "Ordered assignee names (1..12)" },
+        "stage": { "type": "integer" },
+        "dueAt": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", "maxLength": 10 },
+        "dueTime": { "type": "string", "pattern": "^([0-9]{2}:[0-9]{2})?$", "maxLength": 5 },
+        "repeatMode": { "type": "string", "enum": ["none", "daily"] },
+        "repeatSeriesId": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["open", "closed"] },
+        "proofs": { "type": "array", "description": "Proof metadata descriptors (max 10)" },
+        "lastSendBackReason": { "type": "string", "maxLength": 500 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "createdByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["taskId", "title", "branch", "location", "priority", "pathId", "path", "stage", "dueAt", "status", "proofs", "lastSendBackReason", "createdBy", "createdByUid", "orgId", "createdAt", "updatedAt"]
+    },
+    "ScoreEvent": {
+      "title": "ScoreEvent",
+      "description": "Append-only KPI point award or send-back reversal event.",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "uid": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "employeeName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "taskId": { "type": "string", "maxLength": 64 },
+        "points": { "type": "number" },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", "maxLength": 10 },
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["eventId", "uid", "employeeName", "taskId", "points", "reason", "date", "actorUid", "orgId", "at"]
+    },
+    "AttendanceRecord": {
+      "title": "AttendanceRecord",
+      "description": "Daily employee attendance record including clock-in, breaks, clock-out, and admin corrections.",
+      "type": "object",
+      "properties": {
+        "recordId": { "type": "string", "minLength": 1, "maxLength": 80, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "uid": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "employeeName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", "maxLength": 10 },
+        "in": { "type": "string", "pattern": "^([0-9]{2}:[0-9]{2})?$", "maxLength": 5 },
+        "out": { "type": "string", "pattern": "^([0-9]{2}:[0-9]{2})?$", "maxLength": 5 },
+        "breaks": { "type": "array", "description": "Break intervals formatted HH:MM-HH:MM or HH:MM- (max 10)" },
+        "location": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "note": { "type": "string", "maxLength": 300 },
+        "correctedBy": { "type": "string", "maxLength": 100 },
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["recordId", "uid", "employeeName", "date", "in", "out", "breaks", "location", "note", "correctedBy", "actorUid", "orgId", "createdAt", "updatedAt"]
+    },
+    "Holiday": {
+      "title": "Holiday",
+      "description": "Company or per-location holiday calendar entry.",
+      "type": "object",
+      "properties": {
+        "holidayId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", "maxLength": 10 },
+        "location": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["holidayId", "date", "location", "name", "orgId", "createdAt"]
+    },
+    "AttendanceSettings": {
+      "title": "AttendanceSettings",
+      "description": "Working days, shift times, and grace period configuration.",
+      "type": "object",
+      "properties": {
+        "settingId": { "type": "string", "enum": ["attendance"] },
+        "wd": { "type": "array", "description": "Working weekday indices 0..6 (max 7)" },
+        "st": { "type": "string", "pattern": "^[0-9]{2}:[0-9]{2}$", "maxLength": 5 },
+        "en": { "type": "string", "pattern": "^[0-9]{2}:[0-9]{2}$", "maxLength": 5 },
+        "gr": { "type": "integer" },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["settingId", "wd", "st", "en", "gr", "orgId", "updatedAt"]
+    },
+    "AuditLogEntry": {
+      "title": "AuditLogEntry",
+      "description": "Immutable append-only audit trail entry readable only by Developer accounts.",
+      "type": "object",
+      "properties": {
+        "logId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actor": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "actorUserId": { "type": "string", "maxLength": 40 },
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "category": { "type": "string", "enum": ["Sign-in", "Task", "User", "Delete", "Attendance", "Role", "Security", "Export", "Upload"] },
+        "action": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "target": { "type": "string", "maxLength": 160 },
+        "before": { "type": "string", "maxLength": 500 },
+        "after": { "type": "string", "maxLength": 500 },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["logId", "actor", "actorUserId", "actorUid", "category", "action", "target", "before", "after", "orgId", "at"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app assignment, send-back, or escalation notification.",
+      "type": "object",
+      "properties": {
+        "notifId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "recipientName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "type": { "type": "string", "enum": ["assigned", "sendback", "reminder", "overdue", "escalation"] },
+        "taskId": { "type": "string", "maxLength": 64 },
+        "read": { "type": "boolean" },
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["notifId", "recipientName", "title", "message", "type", "taskId", "read", "actorUid", "orgId", "createdAt"]
+    },
+    "SharedFolder": {
+      "title": "SharedFolder",
+      "description": "Shared folder metadata linked to Google Drive for team document organization.",
+      "type": "object",
+      "properties": {
+        "folderId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "parentId": { "type": "string", "maxLength": 64 },
+        "driveFolderId": { "type": "string", "maxLength": 128 },
+        "driveUrl": { "type": "string", "maxLength": 500 },
+        "branch": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "location": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "accessScope": { "type": "string", "enum": ["all", "branch", "location", "selected"] },
+        "allowedEmpIds": { "type": "array", "description": "Authorized employee IDs when accessScope is selected (max 50)" },
+        "description": { "type": "string", "maxLength": 300 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "createdByEmpId": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "createdByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["folderId", "name", "parentId", "driveFolderId", "driveUrl", "branch", "location", "accessScope", "allowedEmpIds", "description", "createdBy", "createdByEmpId", "createdByUid", "orgId", "createdAt", "updatedAt"]
+    },
+    "SharedFile": {
+      "title": "SharedFile",
+      "description": "Google Drive uploaded file metadata indexed for real-time team sharing and access.",
+      "type": "object",
+      "properties": {
+        "fileId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "folderId": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "mimeType": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "sizeBytes": { "type": "number" },
+        "driveFileId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "webViewLink": { "type": "string", "minLength": 1, "maxLength": 600 },
+        "webContentLink": { "type": "string", "maxLength": 600 },
+        "branch": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "location": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "category": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "description": { "type": "string", "maxLength": 400 },
+        "accessScope": { "type": "string", "enum": ["all", "branch", "location", "selected"] },
+        "allowedEmpIds": { "type": "array", "description": "Authorized employee IDs when accessScope is selected (max 50)" },
+        "allowDownload": { "type": "boolean" },
+        "uploadedBy": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "uploadedByEmpId": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "uploadedByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fileId", "folderId", "name", "mimeType", "sizeBytes", "driveFileId", "webViewLink", "webContentLink", "branch", "location", "category", "description", "accessScope", "allowedEmpIds", "allowDownload", "uploadedBy", "uploadedByEmpId", "uploadedByUid", "orgId", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Trusted admin UID registry for role verification."
+    },
+    "/directory/{empDocId}": {
+      "schema": { "$ref": "#/entities/DirectoryEntry" },
+      "description": "Non-PII employee directory profiles for workflows, KPIs, and attendance."
+    },
+    "/users/{empDocId}": {
+      "schema": { "$ref": "#/entities/UserPrivate" },
+      "description": "Private PII and salted password credentials isolated to owner and admins."
+    },
+    "/roles/{roleId}": {
+      "schema": { "$ref": "#/entities/RoleDefinition" },
+      "description": "Built-in and custom RBAC role definitions."
+    },
+    "/branches/{branchId}": {
+      "schema": { "$ref": "#/entities/Branch" },
+      "description": "Company operational branches."
+    },
+    "/locations/{locationId}": {
+      "schema": { "$ref": "#/entities/Location" },
+      "description": "Company office and plant locations."
+    },
+    "/paths/{pathId}": {
+      "schema": { "$ref": "#/entities/WorkflowPath" },
+      "description": "Reusable multi-stage workflow templates."
+    },
+    "/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/Task" },
+      "description": "Active and closed multi-stage operational tasks."
+    },
+    "/scoreEvents/{eventId}": {
+      "schema": { "$ref": "#/entities/ScoreEvent" },
+      "description": "Append-only performance point ledger."
+    },
+    "/attendance/{recordId}": {
+      "schema": { "$ref": "#/entities/AttendanceRecord" },
+      "description": "Daily check-in, break, check-out, and correction records."
+    },
+    "/holidays/{holidayId}": {
+      "schema": { "$ref": "#/entities/Holiday" },
+      "description": "Holiday calendar dates per location."
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/AttendanceSettings" },
+      "description": "Company attendance working-day and shift settings."
+    },
+    "/auditLog/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLogEntry" },
+      "description": "Immutable Developer-only audit log."
+    },
+    "/notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "In-app workflow notifications and overdue escalations."
+    },
+    "/sharedFolders/{folderId}": {
+      "schema": { "$ref": "#/entities/SharedFolder" },
+      "description": "Shared folders synced with Google Drive for team collaboration."
+    },
+    "/sharedFiles/{fileId}": {
+      "schema": { "$ref": "#/entities/SharedFile" },
+      "description": "Files uploaded directly to Google Drive and shared with authorized team members."
+    }
+  }
+}

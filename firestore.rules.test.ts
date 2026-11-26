@@ -1,0 +1,178 @@
+/**
+ * Phase 0 TDD Specification: Dirty Dozen Security Rule Test Cases
+ * Verifies all 12 adversarial payloads against KEJMIN OPS Firestore Rules.
+ * Run with Firebase Emulator Suite & @firebase/rules-unit-testing when executing locally.
+ */
+
+export interface DirtyDozenCase {
+  id: number;
+  name: string;
+  collection: string;
+  docId: string;
+  operation: 'get' | 'list' | 'create' | 'update' | 'delete';
+  auth: { uid: string; email: string; email_verified: boolean } | null;
+  payload?: Record<string, unknown>;
+  expected: 'PERMISSION_DENIED';
+}
+
+export const DIRTY_DOZEN_PAYLOADS: DirtyDozenCase[] = [
+  {
+    id: 1,
+    name: 'Unauthenticated task create',
+    collection: 'tasks',
+    docId: 'task_unauth',
+    operation: 'create',
+    auth: null,
+    payload: { taskId: 'task_unauth', title: 'Bypass', orgId: 'kejmin' },
+    expected: 'PERMISSION_DENIED',
+  },
+  {
+    id: 2,
+    name: 'Unverified admin email spoofing',
+    collection: 'roles',
+    docId: 'role_spoof',
+    operation: 'create',
+    auth: { uid: 'spoof-uid', email: 'krushna.hka2@gmail.com', email_verified: false },
+    payload: { roleId: 'role_spoof', name: 'SpoofAdmin', permissions: [0, 1, 2, 3, 4, 5, 6] },
+    expected: 'PERMISSION_DENIED',
+  },
+  {
+    id: 3,
+    name: 'Self-role escalation on directory registration',
+    collection: 'directory',
+    docId: 'hacker',
+    operation: 'create',
+    auth: { uid: 'user-1', email: 'staff@kejmin.com', email_verified: true },
+    payload: {
+      empId: 'hacker',
+      docId: 'hacker',
+      name: 'Hacker',
+      role: 'Developer',
+      branch: 'All',
+      location: 'All',
+      designation: '',
+      joinedAt: '2026-11-25',
+      photoUrl: '',
+      active: true,
+      authUid: 'user-1',
+      orgId: 'kejmin',
+    },
+    expected: 'PERMISSION_DENIED',
+  },
+  {
+    id: 4,
+    name: 'Cross-user PII read on /users',
+    collection: 'users',
+    docId: 'asha',
+    operation: 'get',
+    auth: { uid: 'other-user', email: 'kiran@kejmin.com', email_verified: true },
+    expected: 'PERMISSION_DENIED',
+  },
+  {
+    id: 5,
+    name: 'Shadow ghost field injection on task create',
+    collection: 'tasks',
+    docId: 'task_ghost',
+    operation: 'create',
+    auth: { uid: 'user-1', email: 'asha@kejmin.com', email_verified: true },
+    payload: {
+      taskId: 'task_ghost',
+      title: 'Valid title',
+      branch: 'MIS',
+      location: 'Bengaluru Office',
+      priority: 'High',
+      pathId: '',
+      path: ['Asha K'],
+      stage: 0,
+      dueAt: '2026-12-01',
+      status: 'open',
+      proofs: [],
+      lastSendBackReason: '',
+      createdBy: 'Asha K',
+      createdByUid: 'user-1',
+      orgId: 'kejmin',
+      isVerified: true,
+    },
+    expected: 'PERMISSION_DENIED',
+  },
+  {
+    id: 6,
+    name: 'Oversized / invalid characters in document ID',
+    collection: 'tasks',
+    docId: 'invalid id! ' + 'a'.repeat(150),
+    operation: 'create',
+    auth: { uid: 'user-1', email: 'asha@kejmin.com', email_verified: true },
+    payload: { taskId: 'bad', title: 'Poison' },
+    expected: 'PERMISSION_DENIED',
+  },
+  {
+    id: 7,
+    name: 'Task stage shortcutting from 0 to 3',
+    collection: 'tasks',
+    docId: 'task_1',
+    operation: 'update',
+    auth: { uid: 'user-1', email: 'asha@kejmin.com', email_verified: true },
+    payload: { stage: 3, status: 'closed' },
+    expected: 'PERMISSION_DENIED',
+  },
+  {
+    id: 8,
+    name: 'Updating terminal closed task as non-admin',
+    collection: 'tasks',
+    docId: 'task_closed',
+    operation: 'update',
+    auth: { uid: 'user-1', email: 'asha@kejmin.com', email_verified: true },
+    payload: { stage: 1, status: 'open' },
+    expected: 'PERMISSION_DENIED',
+  },
+  {
+    id: 9,
+    name: 'Mutating append-only scoreEvent',
+    collection: 'scoreEvents',
+    docId: 'score_1',
+    operation: 'update',
+    auth: { uid: 'admin-1', email: 'krushna.hka2@gmail.com', email_verified: true },
+    payload: { points: 999 },
+    expected: 'PERMISSION_DENIED',
+  },
+  {
+    id: 10,
+    name: 'Deleting immutable auditLog entry',
+    collection: 'auditLog',
+    docId: 'log_1',
+    operation: 'delete',
+    auth: { uid: 'admin-1', email: 'krushna.hka2@gmail.com', email_verified: true },
+    expected: 'PERMISSION_DENIED',
+  },
+  {
+    id: 11,
+    name: 'Client timestamp forgery on scoreEvent create',
+    collection: 'scoreEvents',
+    docId: 'score_forge',
+    operation: 'create',
+    auth: { uid: 'user-1', email: 'asha@kejmin.com', email_verified: true },
+    payload: {
+      eventId: 'score_forge',
+      uid: 'asha',
+      employeeName: 'Asha K',
+      taskId: 'task_1',
+      points: 5,
+      reason: 'Forged date',
+      date: '2026-11-25',
+      actorUid: 'user-1',
+      orgId: 'kejmin',
+      at: '2020-01-01T00:00:00Z',
+    },
+    expected: 'PERMISSION_DENIED',
+  },
+  {
+    id: 12,
+    name: 'Value poisoning on allowed update field',
+    collection: 'directory',
+    docId: 'asha',
+    operation: 'update',
+    auth: { uid: 'user-1', email: 'asha@kejmin.com', email_verified: true },
+    payload: { name: 'X'.repeat(500) },
+    expected: 'PERMISSION_DENIED',
+  },
+];

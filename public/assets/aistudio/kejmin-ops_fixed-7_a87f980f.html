@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KEJMIN OPS – KEJ Mineral</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap">
+<style>
+:root{--blue:#1456d9;--blue2:#0b2f7a;--red:#e5303a;--org:#ff8a1f;--tx:#0b1220;--mut:#51617f;--glass:rgba(255,255,255,.62);--bd:rgba(255,255,255,.85);--bg1:#e8f0ff;--bg2:#fff;--sh:0 10px 40px rgba(20,86,217,.18);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--tx:#eef3ff;--mut:#9db0d6;--glass:rgba(16,32,72,.55);--bd:rgba(120,160,255,.25);--bg1:#06122e;--bg2:#0b1f4d;--sh:0 10px 40px rgba(0,0,0,.4)}}
+*{box-sizing:border-box}html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100%;font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--tx);background:linear-gradient(135deg,var(--bg1),var(--bg2));overflow-x:hidden}
+.orb{position:fixed;border-radius:50%;filter:blur(60px);opacity:.55;z-index:0;animation:fl 12s ease-in-out infinite alternate}
+.o1{width:340px;height:340px;background:var(--blue);top:-80px;left:-60px}.o2{width:280px;height:280px;background:var(--org);bottom:-60px;right:8%;animation-delay:-4s}.o3{width:220px;height:220px;background:var(--red);top:35%;right:-60px;animation-delay:-7s;opacity:.35}
+@keyframes fl{to{transform:translate(40px,50px) scale(1.15)}}
+@keyframes up{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+@keyframes pop{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
+.glass{background:var(--glass);backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);border:1px solid var(--bd);border-radius:20px;box-shadow:var(--sh)}
+#login{position:relative;z-index:1;min-height:100vh;display:grid;place-items:center;padding:20px}
+.lc{width:min(440px,100%);padding:34px;animation:pop .6s both}
+.logo{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.lg{width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,var(--blue),var(--org));display:grid;place-items:center;color:#fff;font-weight:800;box-shadow:0 6px 18px rgba(255,138,31,.45)}
+h1{margin:0;font-size:24px;letter-spacing:.5px}h1 b{color:var(--red)}.sub{color:var(--mut);font-size:13px}
+label{display:block;font-size:12px;font-weight:600;color:var(--mut);margin:14px 0 5px}
+input,select{width:100%;padding:11px 13px;border-radius:12px;border:1px solid var(--bd);background:var(--glass);color:var(--tx);font:inherit;outline:none;transition:.2s}
+input:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(20,86,217,.2)}
+.btn{border:0;cursor:pointer;padding:11px 18px;border-radius:12px;font:600 14px inherit;color:#fff;background:linear-gradient(135deg,var(--blue),var(--blue2));transition:.25s;box-shadow:0 6px 18px rgba(20,86,217,.35)}
+.btn:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(20,86,217,.45)}.btn.o{background:linear-gradient(135deg,var(--org),#ff6a00)}.btn.r{background:linear-gradient(135deg,var(--red),#b3121c)}.btn.g{background:var(--glass);color:var(--tx);border:1px solid var(--bd);box-shadow:none}
+.full{width:100%;margin-top:20px;padding:13px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.chip{font-size:12px;padding:5px 10px;border-radius:99px;cursor:pointer;border:1px solid var(--bd);background:var(--glass);color:var(--tx);transition:.2s}.chip:hover{background:var(--blue);color:#fff}
+#app{position:relative;z-index:1;display:none;min-height:100vh}
+aside{position:fixed;left:14px;top:calc(14px + env(safe-area-inset-top,0px));bottom:14px;width:218px;padding:18px 12px;display:flex;flex-direction:column;gap:4px;animation:up .5s both}
+.nav{padding:11px 14px;border-radius:12px;cursor:pointer;font-weight:600;color:var(--mut);transition:.2s;display:flex;gap:10px;align-items:center}
+.nav:hover{background:rgba(20,86,217,.1);color:var(--blue)}.nav.on{background:linear-gradient(135deg,var(--blue),var(--blue2));color:#fff;box-shadow:0 6px 16px rgba(20,86,217,.35)}
+main{margin-left:246px;padding:18px 18px 40px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 20px;margin-bottom:18px;animation:up .5s both;flex-wrap:wrap}
+.av{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--org),var(--red));color:#fff;display:grid;place-items:center;font-weight:700}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.card{padding:18px;animation:up .6s both}.big{font-size:32px;font-weight:800;color:var(--blue)}.big.r{color:var(--red)}.big.o{color:var(--org)}
+.sec{margin-top:18px;padding:20px;animation:up .7s both}h3{margin:0 0 12px}
+.tbl{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:560px}th{text-align:left;font-size:12px;color:var(--mut);padding:8px}td{padding:10px 8px;border-top:1px solid var(--bd)}
+.tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;color:#fff}.High{background:var(--red)}.Medium{background:var(--org)}.Low{background:var(--blue)}
+.path{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.st{font-size:11px;padding:4px 9px;border-radius:99px;border:1px solid var(--bd);color:var(--mut)}.st.d{background:var(--blue);color:#fff}.st.c{background:var(--org);color:#fff;animation:pulse 1.6s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 6px rgba(255,138,31,.25)}}
+.bar{height:9px;border-radius:9px;background:rgba(20,86,217,.12);overflow:hidden;min-width:90px}.bar i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,var(--blue),var(--org));transition:width 1s}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.row>div{flex:1;min-width:130px}
+.view{display:none}.view.on{display:block}
+svg text{fill:var(--tx);font:600 12px system-ui}svg .m text{fill:var(--mut);font-weight:400;font-size:11px}
+.bx{fill:var(--glass);stroke:var(--blue);stroke-width:1.5}.bxo{stroke:var(--org)}.bxr{stroke:var(--red)}
+ol{margin:0;padding-left:18px;color:var(--mut)}li{margin:4px 0}li b{color:var(--tx)}
+#bye{display:none;color:var(--org);font-weight:600;margin-top:12px;text-align:center}
+@media(max-width:820px){aside{position:static;width:auto;flex-direction:row;overflow-x:auto;margin:10px;padding:8px}.nav{white-space:nowrap}main{margin:0;padding:8px 12px 40px}}
+/* calm corporate theme */
+:root{--blue:#1d4f9f;--blue2:#173f80;--red:#b83a2e;--org:#c9772a;--tx:#1a2230;--mut:#5b6678;--glass:rgba(255,255,255,.86);--bd:#d9e0ea;--bg1:#f2f5f9;--bg2:#f2f5f9;--sh:0 1px 2px rgba(20,40,80,.06)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--tx:#e8edf5;--mut:#9aa7bb;--glass:rgba(24,34,52,.88);--bd:#2b3850;--bg1:#0f1724;--bg2:#0f1724;--sh:none}}
+.orb{display:none}
+.glass{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:10px}
+@keyframes up{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes pop{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:none}}
+.lc{animation:pop .45s both}.card,.sec,.top{animation-duration:.4s}
+.lg{background:var(--blue);box-shadow:none;border-radius:8px;letter-spacing:.5px}
+.av{background:var(--blue)}
+h1{font-size:22px;font-weight:700}
+input,select{border-radius:8px}
+.btn{background:var(--blue);box-shadow:none;border-radius:8px}
+.btn:hover{transform:none;box-shadow:none;background:var(--blue2)}
+.btn.o{background:var(--blue)}.btn.g{background:transparent;color:var(--tx);border:1px solid var(--bd)}.btn.g:hover{background:rgba(29,79,159,.08)}
+.btn.r{background:transparent;color:var(--red);border:1px solid var(--red)}.btn.r:hover{background:var(--red);color:#fff}
+.nav{border-radius:6px;font-weight:500}.nav.on{background:rgba(29,79,159,.1);color:var(--blue);box-shadow:inset 3px 0 0 var(--blue);font-weight:600}
+.big{font-weight:700;font-size:30px}
+.tag{border-radius:4px;font-weight:600;letter-spacing:.2px}
+.st{border-radius:4px}.st.d{background:var(--blue);border-color:var(--blue)}.st.c{animation:none;background:transparent;color:var(--org);border-color:var(--org);font-weight:600}
+.bar i{background:var(--blue)}
+#bye{color:var(--red);font-weight:500}
+@media(min-width:821px){aside{left:0;top:0;bottom:0;width:230px;border-radius:0;border-width:0 1px 0 0;padding-top:calc(18px + env(safe-area-inset-top,0px))}main{margin-left:230px}}
+.g2{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));margin-top:16px}.g2 .sec{margin-top:0}
+textarea{width:100%;min-height:110px;padding:10px;border-radius:8px;border:1px solid var(--bd);background:var(--glass);color:var(--tx);font:12px monospace}
+.lgd{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-top:8px}.lgd i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
+.bar i{transform-origin:left;animation:gw .8s both}@keyframes gw{from{transform:scaleX(0)}}
+.pc{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:6px}.pc label{display:flex;gap:6px;align-items:center;margin:0;font-weight:500;color:var(--tx)}.pc input{width:auto}.ok{color:var(--blue);font-weight:700}
+@media print{aside,.row,.top,.btn{display:none!important}main{margin:0!important}.glass{backdrop-filter:none}}
+.Present,.Working{background:var(--blue)}.Late,.Halfday,.Noclockout{background:var(--org)}.Absent{background:var(--red)}.Holiday,.Weeklyoff,.Notclockedin{background:#6b7a90}.btn:disabled{opacity:.4;cursor:not-allowed}
+.view.on{animation:up .35s both}tr{animation:up .4s both}tr:hover td{background:rgba(29,79,159,.05)}.card{transition:border-color .2s}.card:hover{border-color:var(--blue)}#stats .card{cursor:pointer}.btn:active{transform:scale(.97)}
+#v-att .sec{margin-top:0}.tabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--bd);flex-wrap:wrap}.tabs span{padding:10px 16px;cursor:pointer;color:var(--mut);font-weight:600;border-bottom:3px solid transparent;margin-bottom:-1px;transition:.2s}.tabs span:hover{color:var(--blue)}.tabs span.on{color:var(--blue);border-color:var(--blue)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.ch{font-size:11px;color:var(--mut);text-align:center;font-weight:600}
+.cd{aspect-ratio:1.3;border-radius:8px;border:1px solid var(--bd);padding:5px 7px;font-size:12px;cursor:pointer;transition:.18s;display:flex;flex-direction:column;justify-content:space-between;animation:pop .35s both}.cd:hover{border-color:var(--blue);transform:scale(1.05)}
+.cd.s-Present{background:rgba(29,79,159,.15)}.cd.s-Late,.cd.s-Halfday{background:rgba(201,119,42,.22)}.cd.s-Absent{background:rgba(184,58,46,.2)}.cd.s-Holiday{background:rgba(107,122,144,.25)}.cd.s-Weeklyoff{opacity:.5}.cd.sel{outline:2px solid var(--blue)}.cd.td{border:2px solid var(--org)}.cd.e{visibility:hidden}
+.wk{display:flex;gap:6px;margin-top:10px}.wc{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:11px;border:1px solid var(--bd);color:var(--mut);animation:pop .4s both}.wc.s-Present{background:var(--blue);color:#fff;border-color:var(--blue)}.wc.s-Late,.wc.s-Halfday{background:var(--org);color:#fff;border-color:var(--org)}.wc.s-Absent{background:var(--red);color:#fff;border-color:var(--red)}.wc.s-Holiday{background:#6b7a90;color:#fff}
+.ov{position:fixed;inset:0;background:rgba(10,20,40,.45);z-index:50;display:grid;place-items:center;padding:20px;animation:fi .2s both}@keyframes fi{from{opacity:0}}.md{width:min(460px,100%);padding:24px;background:var(--bg2);color:var(--tx);border-radius:12px;border:1px solid var(--bd);animation:pop .3s both;max-height:85vh;overflow:auto}
+.lk{cursor:pointer;color:var(--blue)}.lk:hover{text-decoration:underline}.toast{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--tx);color:var(--bg2);padding:11px 16px;border-radius:8px;z-index:60;animation:up .3s both;font-size:13px}
+.tl{border-left:2px solid var(--bd);margin:0 0 14px 8px;padding-left:20px}.tl>div{position:relative;margin-bottom:16px}.tl>div:before{content:'';position:absolute;left:-28px;top:3px;width:12px;height:12px;border-radius:50%;background:var(--bd);border:2px solid var(--bg2)}.tl>.d:before{background:var(--blue)}.tl>.c:before{background:var(--org)}
+.lw{display:flex;width:min(900px,100%);align-items:stretch;animation:pop .5s both}.lw .lc{width:430px;border-radius:0 10px 10px 0;animation:none}.lb2{flex:1;background:var(--blue);color:#fff;border-radius:10px 0 0 10px;padding:40px;display:flex;flex-direction:column;border-bottom:4px solid var(--org)}.ft{padding:10px 0 10px 22px;position:relative;border-top:1px solid rgba(255,255,255,.2);animation:up .6s both}.ft:before{content:'';position:absolute;left:0;top:17px;width:8px;height:8px;border-radius:2px;background:var(--org)}
+@media(max-width:760px){.lb2{display:none}.lw .lc{width:100%;border-radius:10px}}
+.eye{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--blue);cursor:pointer;font-weight:600}.er{background:rgba(184,58,46,.1);border:1px solid var(--red);color:var(--red);padding:8px 12px;border-radius:8px;font-size:13px;margin-top:10px}input:disabled{opacity:.6;cursor:not-allowed}
+.kmpl-svg{width:100%;height:auto;filter:drop-shadow(0 14px 24px rgba(0,0,0,.28))}.kmpl-shield{transform-box:fill-box;transform-origin:center;animation:kmplScaleIn .7s cubic-bezier(.16,1,.3,1) forwards}.kmpl-roof-cutout{opacity:0;animation:kmplFadeUp .6s ease-out .3s forwards}.kmpl-diamond{opacity:0;transform-box:fill-box;transform-origin:center;animation:kmplDiamondPop .5s cubic-bezier(.34,1.56,.64,1) forwards,kmplGoldPulse 2.6s ease-in-out 1.5s infinite}.kmpl-diamond.d1{animation-delay:.45s,1.5s}.kmpl-diamond.d2{animation-delay:.53s,1.7s}.kmpl-diamond.d3{animation-delay:.61s,1.9s}.kmpl-diamond.d4{animation-delay:.69s,2.1s}.kmpl-diamond.d5{animation-delay:.77s,2.3s}.kmpl-diamond.d6{animation-delay:.85s,2.5s}.kmpl-text{opacity:0;animation:kmplFadeUp .6s ease-out .9s forwards}
+@keyframes kmplScaleIn{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}@keyframes kmplFadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}@keyframes kmplDiamondPop{from{opacity:0;transform:scale(0) rotate(-45deg)}to{opacity:1;transform:scale(1) rotate(0)}}@keyframes kmplGoldPulse{0%,100%{transform:scale(1);filter:brightness(1)}50%{transform:scale(1.12);filter:brightness(1.2)}}
+.lb2{justify-content:center;align-items:center}.lc>.logo{display:none}@media(max-width:760px){.lc>.logo{display:flex}}
+.kmpl-text{opacity:1;animation:none}.kmpl-text text{opacity:0;transform-box:fill-box;transform-origin:center;animation:klLetter .55s cubic-bezier(.34,1.56,.64,1) forwards}.kmpl-text text:nth-child(1){animation-delay:1s}.kmpl-text text:nth-child(2){animation-delay:1.12s}.kmpl-text text:nth-child(3){animation-delay:1.24s}.kmpl-text text:nth-child(4){animation-delay:1.36s}
+#kl{position:relative;cursor:pointer}#kl:before{content:'';position:absolute;inset:-14%;background:radial-gradient(circle,rgba(251,191,36,.38),transparent 65%);animation:klGlow 3.2s ease-in-out infinite}#kl .kmpl-svg{position:relative;z-index:1;animation:klFloat 5s ease-in-out 1.8s infinite}
+.kl-run{stroke-dasharray:.14 .86;opacity:0;filter:drop-shadow(0 0 4px #fbbf24);animation:klIn .6s ease 1.2s forwards,klRun 3.6s linear 1.2s infinite}.kl-shine{fill:url(#shn);transform:translateX(-140px) skewX(-20deg);animation:klShine 4.2s ease-in-out 2.2s infinite}.kl-sp{transform-box:fill-box;transform-origin:center;opacity:0;animation:klSp 3s ease-in-out infinite}
+@keyframes klLetter{from{opacity:0;transform:translateY(20px) scale(.5)}to{opacity:1;transform:none}}@keyframes klGlow{0%,100%{opacity:.35;transform:scale(.92)}50%{opacity:.9;transform:scale(1.05)}}@keyframes klFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}@keyframes klIn{to{opacity:1}}@keyframes klRun{to{stroke-dashoffset:-1}}@keyframes klShine{0%{transform:translateX(-140px) skewX(-20deg)}45%,100%{transform:translateX(560px) skewX(-20deg)}}@keyframes klSp{0%,100%{opacity:0;transform:scale(0) rotate(0)}50%{opacity:1;transform:scale(1) rotate(90deg)}}
+.pban{border-radius:12px;overflow:hidden;border:1px solid var(--bd);background:var(--glass);animation:up .4s both}.pcov{height:120px;background:var(--blue);border-bottom:3px solid var(--org);position:relative}.pcov:after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.07) 0 14px,transparent 14px 28px)}
+.phd{display:flex;gap:20px;align-items:flex-end;padding:0 26px 22px;margin-top:-46px;position:relative}.pav2{width:96px;height:96px;font-size:38px;border:4px solid var(--bg2);box-shadow:0 4px 14px rgba(20,40,80,.2);flex:none;background:var(--blue)}.pnm{font-size:24px;font-weight:700;letter-spacing:.2px}.phd>div:last-child{padding-bottom:4px}
+.pst{margin:16px 0}.pg{grid-template-columns:1fr!important;max-width:780px}.fg{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}@media(max-width:600px){.fg{grid-template-columns:1fr}.phd{flex-direction:column;align-items:flex-start}}
+#v-blue ul,#v-blue ol{padding-left:20px;margin:6px 0}#v-blue li{margin:5px 0}#v-blue td{vertical-align:top}#v-blue .two{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}#v-blue h4{margin:14px 0 6px}
+#v-blue details{border-top:1px solid var(--bd);padding:10px 2px}#v-blue summary{cursor:pointer;font-weight:700;padding:4px 0}#v-blue summary:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:6px}#v-blue details>div{padding:4px 0 6px 4px}#v-blue .note{margin-top:10px;padding:10px 14px;border-radius:12px;border:1px solid var(--bd);background:var(--glass)}
+#v-log .term{--tbg:#0d1117;--tfg:#c9d1d9;--tdim:#8b949e;--tln:#21262d;background:var(--tbg);color:var(--tfg);border:1px solid #30363d;border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.35);font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;overflow:hidden;color-scheme:dark}
+#v-log .tbar{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 16px;background:#161b22;border-bottom:1px solid #30363d;color:var(--tdim);font-size:12px}
+#v-log .tfl{display:flex;flex-wrap:wrap;gap:10px 16px;padding:12px 16px;border-bottom:1px solid var(--tln);align-items:end}
+#v-log .tfl label{margin:0 0 3px;color:var(--tdim);font:inherit;font-size:12px;font-weight:400}
+#v-log .tfl input,#v-log .tfl select{width:auto;min-width:130px;padding:5px 8px;border-radius:6px;border:1px solid #30363d;background:#010409;color:var(--tfg);font:inherit;box-shadow:none}
+#v-log .tfl input:focus,#v-log .tfl select:focus{border-color:#58a6ff;box-shadow:0 0 0 2px rgba(88,166,255,.3)}
+#v-log .tfl input#lgfq{min-width:200px}
+#v-log .tbtn{border:1px solid #30363d;background:transparent;color:#58a6ff;font:inherit;padding:5px 10px;border-radius:6px;cursor:pointer}
+#v-log .tbtn:hover{background:#161b22;border-color:#58a6ff}
+#v-log .tbtn:focus-visible,#v-log summary:focus-visible{outline:2px solid #58a6ff;outline-offset:2px}
+#v-log .tbody{padding:12px 16px 16px;max-height:68vh;overflow:auto}
+#v-log .pr{color:#7ee787}#v-log .pr i{font-style:normal;color:#58a6ff}
+#v-log .sm{color:var(--tdim);margin:6px 0 10px}
+#v-log .ln{display:grid;grid-template-columns:max-content minmax(110px,max-content) 92px 1fr;gap:0 14px;padding:2px 6px;border-radius:4px}
+#v-log .ln:hover{background:#161b22}
+#v-log .ln .tm{color:var(--tdim)}#v-log .ln .us{color:#e6edf3}#v-log .ln .tx{word-break:break-word}
+#v-log .ty{font-weight:700}
+#v-log .c-Sign-in{color:#56d4dd}#v-log .c-Task{color:#7ee787}#v-log .c-User{color:#e3b341}#v-log .c-Delete{color:#ff7b72}#v-log .c-Security{color:#ff7b72}#v-log .c-Attendance{color:#79c0ff}#v-log .c-Role{color:#d2a8ff}#v-log .c-Export{color:#f0b072}#v-log .c-Upload{color:#ffa657}
+#v-log .cur{display:inline-block;width:8px;height:15px;background:#7ee787;vertical-align:-3px;margin-left:3px;animation:blk 1.1s steps(1) infinite}
+@keyframes blk{50%{opacity:0}}
+@media(prefers-reduced-motion:reduce){#v-log .cur{animation:none}}
+@media(max-width:760px){#v-log .ln{grid-template-columns:1fr;padding:6px;border-bottom:1px solid var(--tln)}}
+
+/* ===== Strata redesign: slate, quartz and gold from the KEJ mark ===== */
+:root{--blue:#1d4f9f;--blue2:#173f80;--red:#b83a2e;--org:#c9772a;--tx:#1a2230;--mut:#5b6678;--glass:rgba(255,255,255,.86);--bd:#d9e0ea;--bg1:#f2f5f9;--bg2:#f2f5f9;--sh:none;--fd:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--tx:#e8edf5;--mut:#9aa7bb;--glass:rgba(24,34,52,.88);--bd:#2b3850;--bg1:#0f1724;--bg2:#0f1724}}
+body{font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14.5px;background:var(--bg1)}
+svg text{font-family:inherit}
+.glass{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--glass);border:1px solid var(--bd);border-radius:6px;box-shadow:none}
+.card,.sec,.top,.lc,tr,.cd,.wc{animation:none}
+.view.on{animation:vin .25s ease-out both}@keyframes vin{from{opacity:0}}
+h3{font-family:var(--fd);font-size:17px;font-weight:600}
+.sec>h3:first-child{padding-bottom:10px;border-bottom:1px solid var(--bd);margin-bottom:14px}
+.top b{font-family:var(--fd);font-size:17px;font-weight:600}
+.av{background:var(--blue);color:#fff;border-radius:4px;font-family:var(--fd);font-weight:600}
+.lg{background:var(--blue);color:#fff;border-radius:4px;font-family:var(--fd);font-weight:700}
+input,select,textarea{border-radius:4px}
+input:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(26,70,102,.22)}
+.btn{background:var(--blue);color:#fff;border-radius:4px;font-weight:600;transition:background .15s}
+.btn:hover{background:var(--blue2)}
+.btn.o{background:var(--blue);color:#fff}.btn.o:hover{background:var(--blue2)}
+.btn.g{background:transparent;color:var(--tx)}.btn.g:hover{background:rgba(29,79,159,.08)}.btn.r{background:transparent;color:var(--red)}.btn.r:hover{background:var(--red);color:#fff}
+.chip{border-radius:3px}.chip:hover{background:var(--blue)}
+.tag,.st,.er{border-radius:3px}
+.High,.Absent{background:var(--red)}.Medium,.Late,.Halfday,.Noclockout{background:var(--org)}.Low,.Present,.Working{background:var(--blue)}
+.st.d{background:var(--blue);border-color:var(--blue);color:#fff}
+th{font-weight:600;font-size:12.5px;border-bottom:2px solid var(--tx)}
+.card{border-left:4px solid var(--blue)}.card:has(.big.o){border-left-color:var(--org)}.card:has(.big.r){border-left-color:var(--red)}
+.big{font-family:var(--fd);font-weight:600;font-size:38px;letter-spacing:-.5px}
+.bar{border-radius:0;background:rgba(29,79,159,.12)}.bar i{border-radius:0;background:var(--blue)}
+.md,.toast,.cd{border-radius:6px}.toast{border-radius:4px}
+#v-log .term{border-radius:6px}
+@media(min-width:821px){aside.glass{border-radius:0;border-width:0 1px 0 0}}
+/* strata art and heroes */
+.art{position:absolute;overflow:hidden;pointer-events:none}.art svg{display:block;width:100%;height:100%}
+.art .b{opacity:0;transform:translateX(90px);animation:lay 1s cubic-bezier(.2,.7,.2,1) forwards;animation-delay:calc(var(--i)*120ms)}
+@keyframes lay{to{opacity:1;transform:none}}
+.art .vein{stroke-dasharray:1300;stroke-dashoffset:1300;animation:vein 1.9s .6s ease-out forwards}.art .v2{animation-delay:.85s}
+@keyframes vein{to{stroke-dashoffset:0}}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}}
+#login{padding:0;place-items:stretch}
+.lw{width:100%;min-height:100vh;animation:none}
+.lb2{border-radius:0;border-bottom:4px solid var(--org);background:var(--blue);position:relative;overflow:hidden;padding:44px 52px;align-items:flex-start;justify-content:flex-start}
+.lb2>*{position:relative;z-index:2}.lb2>.art{position:absolute;z-index:1;inset:auto 0 0 0;height:52%}
+#kl{width:104px!important;margin:0!important}#kl:before{display:none}#kl .kmpl-svg{animation:none;filter:none}.kl-run,.kl-shine,.kl-sp{display:none}
+.lb2>div:nth-child(2){text-align:left!important;margin-top:14px!important}
+.lhd{margin-top:11vh;max-width:30rem}.lhd h2{font-family:var(--fd);font-weight:600;font-size:clamp(30px,3.6vw,46px);line-height:1.08;margin:0 0 14px;animation:rise .7s .45s cubic-bezier(.2,.7,.2,1) both}
+.lhd p{margin:0;color:rgba(255,255,255,.88);font-size:16px;line-height:1.55;animation:rise .7s .6s cubic-bezier(.2,.7,.2,1) both}
+.lloc{margin-top:auto;display:flex;gap:26px;flex-wrap:wrap;width:100%;padding-top:12px;border-top:1px solid rgba(255,255,255,.25);color:rgba(255,255,255,.9);font-size:13.5px}
+.lw .lc{width:min(500px,44%);border-radius:0;border:0;border-left:1px solid var(--bd);padding:48px 44px;display:flex;flex-direction:column;justify-content:center;background:var(--glass)}
+@media(max-width:900px){.lw{flex-direction:column}.lb2{min-height:340px;padding:28px}.lhd{margin-top:5vh}.lw .lc{width:100%;border-left:0}}
+@media(max-width:760px){.lw .lc{border-radius:0}}
+.dhero{position:relative;overflow:hidden;background:var(--blue);border-bottom:4px solid var(--org);color:#fff;border-radius:6px;min-height:178px;margin-bottom:16px;display:flex;align-items:center}
+.dhero .art{inset:0 0 0 36%;-webkit-mask-image:linear-gradient(90deg,transparent,#000 38%);mask-image:linear-gradient(90deg,transparent,#000 38%)}
+.dcopy{position:relative;z-index:2;padding:28px 32px;max-width:min(580px,100%)}
+.dcopy>*{animation:rise .6s cubic-bezier(.2,.7,.2,1) both}.dcopy>:nth-child(2){animation-delay:.1s}.dcopy>:nth-child(3){animation-delay:.2s}
+.dhero h2{font-family:var(--fd);font-weight:600;font-size:34px;line-height:1.1;margin:0 0 8px}
+.dhero p{margin:0 0 10px;color:rgba(255,255,255,.88);font-size:15px}.dhero .dd{font-size:12.5px;color:rgba(255,255,255,.72)}
+@media(max-width:700px){.dhero .art{inset:0;opacity:.4}}
+@media(prefers-reduced-motion:reduce){.art .b,.art .vein,.lhd h2,.lhd p,.dcopy>*{animation:none;opacity:1;transform:none;stroke-dashoffset:0}.kmpl-diamond{animation:none!important;opacity:1}}
+
+/* ===== responsive: phone, tablet, desktop ===== */
+#mnu,#scrim{display:none}
+#atb{display:block;overflow-x:auto;max-width:100%}
+.g2{grid-template-columns:repeat(auto-fit,minmax(min(310px,100%),1fr))}
+#v-blue .two{grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))}
+img,svg{max-width:100%}
+@media(min-width:981px) and (max-width:1100px){aside.glass{width:200px}main{margin-left:200px}}
+@media(min-width:1500px){main{padding:24px 40px 48px}}
+/* tablet and phone: menu becomes a slide-in drawer */
+@media(max-width:980px){
+#mnu{display:inline-flex;align-items:center}
+aside.glass{position:fixed;left:0;top:0;bottom:0;width:min(280px,84vw);margin:0;padding:calc(18px + env(safe-area-inset-top,0px)) 12px calc(18px + env(safe-area-inset-bottom,0px));flex-direction:column;overflow-x:hidden;overflow-y:auto;border-radius:0;border-width:0 1px 0 0;transform:translateX(-102%);transition:transform .25s ease;z-index:70;background:var(--bg2)}
+aside.glass.open{transform:none}
+aside.glass{animation:none}
+aside .nav{white-space:normal}
+#scrim{display:block;position:fixed;inset:0;background:rgba(10,20,40,.45);z-index:65;opacity:0;pointer-events:none;transition:opacity .25s}
+#scrim.on{opacity:1;pointer-events:auto}
+main{margin:0;padding:0 16px 40px}
+.top{position:sticky;top:0;z-index:20;margin:0 -16px 16px;border-radius:0;border-width:0 0 1px;padding:10px 16px;padding-top:calc(10px + env(safe-area-inset-top,0px));background:var(--bg2)}
+}
+/* phone */
+@media(max-width:820px){input,select,textarea{font-size:16px}}
+@media(max-width:600px){
+body{font-size:14px}
+main{padding:0 12px 32px}.top{margin:0 -12px 12px;padding-left:12px;padding-right:12px}
+#wr{max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sec{padding:14px}.card{padding:14px}
+.grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.big{font-size:30px}
+.row>div{min-width:calc(50% - 8px)}.row>div:only-child{min-width:100%}
+.dhero{min-height:150px}.dcopy{padding:20px}.dhero h2{font-size:26px}
+.cal{gap:3px}.cd{aspect-ratio:1;padding:3px 4px;font-size:11px;border-radius:4px}
+.tabs span{padding:9px 12px}
+.md{padding:18px}
+
+}
+/* touch screens: comfortable tap targets */
+@media(pointer:coarse){.btn,.nav,input,select,.tabs span,.chip{min-height:44px}.nav{display:flex;align-items:center}.btn{display:inline-flex;align-items:center;justify-content:center}}
+@media(max-width:760px){
+.lb2{display:flex;min-height:230px;padding:20px 22px}
+#kl{width:60px!important}.lb2>div:nth-child(2){margin-top:8px!important}
+.lhd{margin-top:12px}.lhd h2{font-size:26px;margin-bottom:0}.lhd p,.lloc{display:none}
+.lb2>.art{height:60%}
+.lc>.logo{display:none}
+.lw .lc{padding:28px 22px;justify-content:flex-start}
+}
+
+/* ===== tasks page ===== */
+.tk-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px}.tk-head h2{margin:0;font-family:var(--fd);font-weight:600;font-size:26px}
+.tk-tabs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.tk-tab{flex:1;min-width:128px;text-align:left;cursor:pointer;padding:12px 14px;border:1px solid var(--bd);border-radius:6px;background:var(--glass);color:var(--tx);font:inherit;transition:border-color .15s}
+.tk-tab b{display:block;font-family:var(--fd);font-size:26px;font-weight:600;line-height:1.15}.tk-tab span{font-size:12.5px;color:var(--mut)}
+.tk-tab:hover{border-color:var(--blue)}.tk-tab.on{border-color:var(--blue);box-shadow:inset 0 -3px 0 var(--blue)}.tk-tab.r b{color:var(--red)}.tk-tab.o b{color:var(--org)}
+.tk-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;padding:12px 14px;margin-bottom:14px}.tk-bar>div{flex:1;min-width:130px}.tk-bar>.tk-sq{flex:2;min-width:200px}.tk-bar label{margin:0 0 5px}
+.tk-bar>.tk-vt{display:flex;flex:0 0 auto;min-width:0;border:1px solid var(--bd);border-radius:4px;overflow:hidden}
+.tk-vt button{border:0;background:transparent;color:var(--mut);padding:10px 16px;font:inherit;font-weight:600;cursor:pointer}.tk-vt button.on{background:var(--blue);color:#fff}
+.tk-list{display:grid;gap:10px}
+.tk-card{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1.7fr) minmax(0,1fr);gap:18px;align-items:center;padding:14px 18px;border-left:4px solid var(--blue)}
+.tk-card.p-High{border-left-color:var(--red)}.tk-card.p-Medium{border-left-color:var(--org)}
+.tk-card.mine{background:linear-gradient(90deg,rgba(201,119,42,.10),transparent 60%),var(--glass)}
+.tk-title{border:0;background:none;padding:0;font:inherit;font-size:16px;font-weight:600;color:var(--tx);cursor:pointer;text-align:left}.tk-title:hover{color:var(--blue);text-decoration:underline}.tk-title:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.tk-me{font-size:11px;font-weight:700;padding:2px 8px;border-radius:3px;background:var(--org);color:#fff;margin-left:8px;vertical-align:2px;white-space:nowrap}
+.tk-meta{color:var(--mut);font-size:13px;margin-top:6px;display:flex;gap:4px 10px;flex-wrap:wrap;align-items:center}
+.tk-st{display:flex;overflow-x:auto;padding:2px 0}
+.tk-s{flex:1 0 76px;position:relative;text-align:center;font-size:12px;color:var(--mut)}
+.tk-s:not(:first-child):before{content:'';position:absolute;top:15px;left:-50%;width:100%;height:2px;background:var(--bd)}
+.tk-s.d:not(:first-child):before,.tk-s.c:not(:first-child):before{background:var(--blue)}
+.tk-dot{position:relative;z-index:1;width:30px;height:30px;border-radius:50%;margin:0 auto 5px;display:grid;place-items:center;font-size:11px;font-weight:700;background:var(--bg2);border:2px solid var(--bd);color:var(--mut)}
+.tk-s.d .tk-dot{background:var(--blue);border-color:var(--blue);color:#fff}
+.tk-s.c .tk-dot{border-color:var(--org);color:var(--org);box-shadow:0 0 0 4px rgba(201,119,42,.18)}
+.tk-s.c .tk-nm{color:var(--tx);font-weight:600}
+.tk-nm{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
+.tk-side{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.tk-due{font-size:13px;font-weight:600;color:var(--mut)}.tk-due.late{color:var(--red)}.tk-due.warn{color:var(--org)}.tk-due.ok{color:var(--blue)}
+.tk-wait{font-size:12.5px;color:var(--mut)}.tk-wait b{color:var(--tx)}
+.tk-act{display:flex;gap:8px;flex-wrap:wrap}.tk-act:empty{display:none}.tk-act .btn{padding:7px 12px;font-size:13px}
+.tk-board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+.tk-col{background:rgba(29,79,159,.05);border:1px solid var(--bd);border-radius:6px;padding:10px}
+.tk-col>h4{margin:2px 4px 10px;display:flex;justify-content:space-between;align-items:center;font-family:var(--fd);font-size:15px;font-weight:600}
+.tk-col .tk-card{grid-template-columns:minmax(0,1fr);gap:10px;margin-bottom:10px}
+.tk-empty{padding:34px 16px;text-align:center;color:var(--mut)}
+@media(max-width:900px){.tk-card{grid-template-columns:minmax(0,1fr);gap:12px}}
+@media(max-width:800px){.tk-board{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){.tk-tab{min-width:calc(50% - 5px)}.tk-tab b{font-size:22px}.tk-bar>div{min-width:calc(50% - 8px)}.tk-bar>.tk-sq{min-width:100%}}
+.pph-act{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.pph-act .btn{padding:7px 12px;font-size:13px}.av{background-size:cover;background-position:center}.av.ph{color:transparent}
+.phd{align-items:flex-start}.phd>div:last-child{padding:52px 0 4px}@media(max-width:600px){.phd>div:last-child{padding-top:0}}
+
+/* ===== retractable menu ===== */
+.ni{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nt{white-space:nowrap}
+#out{display:flex;align-items:center;justify-content:center;gap:8px}
+.sbt{margin-left:auto;display:flex;align-items:center;justify-content:center;width:30px;height:30px;flex:none;border:1px solid var(--bd);border-radius:4px;background:transparent;color:var(--mut);cursor:pointer;transition:color .15s,border-color .15s}
+.sbt:hover{color:var(--blue);border-color:var(--blue)}.sbt:focus-visible{outline:2px solid var(--blue);outline-offset:2px}.sbt svg{transition:transform .2s}
+body.sb-c .sbt svg{transform:rotate(180deg)}
+@media(max-width:980px){.sbt{display:none}}
+@media(min-width:981px){
+aside.glass{z-index:40;overflow-x:hidden;transition:width .28s cubic-bezier(.4,0,.2,1),box-shadow .28s ease,background-color .28s ease}
+main{transition:margin-left .28s cubic-bezier(.4,0,.2,1)}
+body.sb-c main{margin-left:68px}
+body.sb-c aside.glass{background:var(--panel)}
+aside.glass.cl{width:68px}
+body.sb-c aside.glass:not(.cl){box-shadow:8px 0 28px rgba(10,20,40,.22)}
+/* nothing is removed or re-aligned while the menu moves: icons stay put, text and brand fade */
+aside.glass .nt,aside.glass .sbb,aside.glass .sbt{transition:opacity .2s ease .1s}
+aside.cl .nt,aside.cl .sbb,aside.cl .sbt{opacity:0;pointer-events:none;transition-delay:0s;transition-duration:.12s}
+.nav{padding-left:12px;padding-right:12px}
+.sbl{padding:4px 0 14px 3px!important}
+.sbb{white-space:nowrap}
+#out{justify-content:flex-start;padding-left:11px;padding-right:11px}
+}
+@media(prefers-reduced-motion:reduce){aside.glass,main,.sbt svg{transition:none}}
+:root{--panel:#fbfcfe}@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--panel:#182234}}
+.lg.ph{color:transparent}
+</style></head><body>
+
+
+<section id="login"><div class="lw"><div class='lb2'><div id='kl' style='width:230px;max-width:70%;margin:0 auto'><svg class='kmpl-svg' viewBox='0 0 400 370' xmlns='http://www.w3.org/2000/svg'><defs><linearGradient id='rimGrad' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' stop-color='#ffffff'/><stop offset='50%' stop-color='#cbd5e1'/><stop offset='100%' stop-color='#475569'/></linearGradient><linearGradient id='surfaceGrad' x1='15%' y1='5%' x2='85%' y2='95%'><stop offset='0%' stop-color='#ffffff'/><stop offset='100%' stop-color='#e4e2dc'/></linearGradient><linearGradient id='goldGrad' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' stop-color='#fbbf24'/><stop offset='100%' stop-color='#b45309'/></linearGradient><clipPath id='innerClip'><polygon points='200,46 316,258 84,258'/></clipPath><clipPath id='shClip'><path d='M 200 22 L 365 323 Q 377 346 351 346 L 49 346 Q 23 346 35 323 Z'/></clipPath><linearGradient id='shn' x1='0' y1='0' x2='1' y2='0'><stop offset='0' stop-color='#fbbf24' stop-opacity='0'/><stop offset='.5' stop-color='#fbbf24' stop-opacity='.6'/><stop offset='1' stop-color='#fbbf24' stop-opacity='0'/></linearGradient></defs><g class='kmpl-shield'><path d='M 200 14 L 372 325 Q 387 354 354 354 L 46 354 Q 13 354 28 325 Z' fill='url(#rimGrad)'/><path d='M 200 22 L 365 323 Q 377 346 351 346 L 49 346 Q 23 346 35 323 Z' fill='url(#surfaceGrad)'/></g><g clip-path='url(#innerClip)'><polygon points='200,46 316,258 84,258' fill='url(#surfaceGrad)'/><path class='kmpl-roof-cutout' d='M 155 127 L 84 258 L 106 258 L 154 202 L 200 248 L 246 202 L 294 258 L 316 258 L 245 127 L 223 149 L 200 126 L 177 149 Z' fill='#0f172a'/><polygon class='kmpl-diamond d1' points='200,66 212,78 200,90 188,78' fill='url(#goldGrad)'/><polygon class='kmpl-diamond d2' points='181,85 193,97 181,109 169,97' fill='url(#goldGrad)'/><polygon class='kmpl-diamond d3' points='219,85 231,97 219,109 207,97' fill='url(#goldGrad)'/><polygon class='kmpl-diamond d4' points='200,104 212,116 200,128 188,116' fill='url(#goldGrad)'/><polygon class='kmpl-diamond d5' points='154,142 173,161 154,180 135,161' fill='url(#goldGrad)'/><polygon class='kmpl-diamond d6' points='246,142 265,161 246,180 227,161' fill='url(#goldGrad)'/></g><line x1='82' y1='260' x2='318' y2='260' stroke='#0f172a' stroke-width='3.2'/><g class='kmpl-text' font-family="Georgia,'Times New Roman',serif" font-weight='bold' font-size='44' fill='#1e3a8a' text-anchor='middle'><text x='98' y='318'>K</text><text x='166' y='318'>M</text><text x='236' y='318'>P</text><text x='302' y='318'>L</text></g><path class='kl-run' pathLength='1' d='M 200 14 L 372 325 Q 387 354 354 354 L 46 354 Q 13 354 28 325 Z' fill='none' stroke='#fbbf24' stroke-width='4' stroke-linecap='round'/><g clip-path='url(#shClip)'><rect class='kl-shine' x='0' y='0' width='90' height='400'/></g><path class='kl-sp' style='animation-delay:1.6s' fill='#fbbf24' d='M 212 21 L 214.5 27.5 L 221 30 L 214.5 32.5 L 212 39 L 209.5 32.5 L 203 30 L 209.5 27.5 Z'/><path class='kl-sp' style='animation-delay:2.4s' fill='#fbbf24' d='M 44 309 L 46.5 315.5 L 53 318 L 46.5 320.5 L 44 327 L 41.5 320.5 L 35 318 L 41.5 315.5 Z'/><path class='kl-sp' style='animation-delay:3.1s' fill='#fbbf24' d='M 358 309 L 360.5 315.5 L 367 318 L 360.5 320.5 L 358 327 L 355.5 320.5 L 349 318 L 355.5 315.5 Z'/></svg></div><div style='text-align:center;margin-top:14px'><b style='font-size:18px;letter-spacing:.5px'>KEJMIN OPS</b><div style='opacity:.8;font-size:13px'>KEJ Minerals Private Limited</div></div><div class="lhd"><h2>From plant floor to final sign-off</h2><p>Tasks, approvals, attendance and scores for the Bengaluru office, Plant 1 and Plant 2, kept in one place.</p></div><div class="art" aria-hidden="true"></div></div><div class="lc glass">
+<div class="logo"><div class="lg">KM</div><div><h1>KEJMIN <b>OPS</b></h1></div></div>
+<div id="bye">You’ve been signed out securely. See you soon!</div>
+<div class='tabs' id='lt2' style='margin:16px 0 0'><span class='on' data-t='in'>Sign in</span><span data-t='up'>Create account</span></div><div id='lerr'></div><div id='fs'><label>User ID</label><input id="em" value="developer" autocomplete="username">
+<label>Password</label><div style='position:relative'><input id="pw" type="password" value="demo1234" autocomplete="current-password"><span class='eye' id='eye'>Show</span></div>
+
+<div class="chips" id="chips"></div>
+<button class="btn full" id="go">Sign in</button></div><div id='fr' style='display:none'><label>Full name</label><input id='gn'><label>User ID (cannot be changed later)</label><input id='gu' placeholder='e.g. ramesh.k' autocomplete='username'><div class='row'><div><label>Password</label><input id='gp' type='password'></div><div><label>Confirm</label><input id='gq' type='password'></div></div><div class='row'><div><label>Branch</label><select id='gb'></select></div><div><label>Location</label><select id='gl'></select></div></div><button class='btn full' id='gbtn'>Create account</button></div>
+
+</div></div></section>
+
+<section id="app">
+<div id="scrim"></div>
+<aside class="glass" id="sidenav">
+<div class="logo sbl" style="padding:4px 8px 14px"><div class="lg" style="width:38px;height:38px">KM</div><div class="sbb"><b>KEJMIN OPS</b><div class="sub">KEJ Mineral</div></div><button class="sbt" id="sbt" type="button" aria-label="Retract menu" aria-pressed="false" title="Retract menu"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button></div>
+<div class="nav on" data-v="dash"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span class="nt">Dashboard</span></div><div class="nav" data-v="tasks"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.5 1.5L7 5M3.5 12l1.5 1.5L7 11M3.5 18l1.5 1.5L7 17"/></svg><span class="nt">Tasks</span></div><div class="nav" data-v="att"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="nt">Attendance</span></div><div class="nav" data-v="flow"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><path d="M6 9v3a3 3 0 003 3h6"/></svg><span class="nt">Workflow builder</span></div><div class="nav" data-v="kpi"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V4M19 20v-6"/></svg><span class="nt">KPI &amp; scores</span></div><div class="nav" data-v="rep"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 17h6"/></svg><span class="nt">Reports</span></div><div class="nav" data-v="roles"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg><span class="nt">Roles &amp; access</span></div><div class="nav" data-v="blue"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg><span class="nt">Blueprint</span></div><div class="nav" data-v="usr" id="nusr"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6"/><path d="M16 4.5a3.5 3.5 0 010 7M18 14c2 .7 3.5 2.6 3.5 6"/></svg><span class="nt">User management</span></div><div class="nav" data-v="log" id="nlog" style="display:none"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 16h5"/></svg><span class="nt">Log</span></div><div class="nav" data-v="prof"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span class="nt">My profile</span></div>
+<div style="flex:1"></div><button class="btn r" id="out" type="button"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5M16 8l4 4-4 4M20 12H9"/></svg><span class="nt">Log out</span></button>
+</aside>
+<main>
+<div class="top glass"><div style="display:flex;gap:12px;align-items:center"><button class="btn g" id="mnu" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="sidenav">Menu</button><div><b id="wl">Welcome</b><div class="sub" id="wr"></div></div></div><div style="display:flex;gap:10px;align-items:center"><span class="tag Low" id="loc"></span><div class="av" id="av"></div></div></div>
+
+<div class="view on" id="v-dash"><div class="dhero"><div class="art" aria-hidden="true"></div><div class="dcopy"><h2 id="dht">Welcome</h2><p id="dhs"></p><div class="dd" id="dhd"></div></div></div><div class="grid" id="stats"></div>
+<div class="glass sec"><h3>Branch workload</h3><div id="br"></div></div></div>
+
+<div class="view" id="v-tasks"><div class="tk-head"><div><h2>Tasks</h2><div class="sub" id="tk-sub"></div></div><button class="btn" id="tk-new" type="button">+ New task</button></div>
+<div class="tk-tabs" id="tk-tabs"></div>
+<div class="glass tk-bar"><div class="tk-sq"><label for="tks">Search</label><input id="tks" type="search" placeholder="Task, person, branch"></div><div><label for="tkb">Branch</label><select id="tkb"></select></div><div><label for="tkl">Location</label><select id="tkl"></select></div><div><label for="tkp">Importance</label><select id="tkp"></select></div><div><label for="tkso">Sort by</label><select id="tkso"><option value="due">Due date</option><option value="imp">Importance</option><option value="new">Newest first</option></select></div><div class="tk-vt" role="group" aria-label="View"><button type="button" data-v="list">List</button><button type="button" data-v="board">Board</button></div></div>
+<div id="tk-body"></div></div>
+
+<div class="view" id="v-flow"><div class="glass sec" style="margin-top:0"><h3>Create task &amp; process path</h3>
+<div class="row"><div><label>Title</label><input id="ft" placeholder="e.g. Dispatch report – Plant 1"></div>
+<div><label>Branch</label><select id="fb"></select></div><div><label>Location</label><select id="fl"></select></div>
+<div><label>Importance</label><select id="fp"><option>Low</option><option selected>Medium</option><option>High</option></select></div></div>
+<label>Start from a template</label><select id='tp'></select><label>Process path (stages in order — each stage hands over to the next when marked done)</label>
+<div class="row" id="stg"></div>
+<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn g" id="as">+ Add stage</button><button class="btn o" id="ct">Create task</button></div></div></div>
+
+<div class="view" id="v-kpi"><div class="glass sec" style="margin-top:0"><h3>Performance scores</h3>
+<div class="row"><div><label>From</label><input type="date" id="d1"></div><div><label>To</label><input type="date" id="d2"></div>
+<div style="flex:0"><button class="btn g" data-p="m">This month</button></div><div style="flex:0"><button class="btn g" data-p="fy">Financial year</button></div></div>
+<div class="sub" style="margin:10px 0">Points per completed stage: Low = 1 · Medium = 3 · High = 5 (×1.5 bonus if on time)</div>
+<div class="tbl"><table id="kt"></table></div></div></div>
+
+<div class='view' id='v-att'><div class='tabs' id='atabs'><span data-t='lk'>Today</span><span data-t='ak'>My month</span><span data-t='tm'>Team</span><span data-t='st'>Settings</span></div><div class='glass sec' id='ck' style='margin-top:0'><h3>Time clock</h3><div style='display:flex;gap:28px;align-items:center;flex-wrap:wrap'><svg viewBox='0 0 120 120' width='130'><circle cx='60' cy='60' r='50' fill='none' stroke='rgba(120,140,170,.2)' stroke-width='9'/><circle id='rgc' cx='60' cy='60' r='50' fill='none' stroke='#1d4f9f' stroke-width='9' stroke-linecap='round' stroke-dasharray='0 314' transform='rotate(-90 60 60)' style='transition:stroke-dasharray 1s ease'/><text id='rgt' x='60' y='58' text-anchor='middle' style='font-size:15px'>0h 00m</text><text x='60' y='76' text-anchor='middle' style='font-size:9px;font-weight:400'>worked today</text></svg><div><div class='big' id='clk' style='font-size:34px'></div><div class='sub' id='cs'></div><div class='wk' id='wk'></div></div><div style='display:flex;gap:10px'><button class='btn' id='ci'>Clock in</button><button class='btn r' id='co'>Clock out</button></div></div></div>
+<div class='glass sec' id='rc3'><h3>Attendance record</h3><div class='row'><div><label>Month</label><input type='month' id='am'></div><div style='flex:0;min-width:0'><button class='btn g' id='mp'>‹</button></div><div style='flex:0;min-width:0'><button class='btn g' id='mn'>›</button></div><div id='aew'><label>Employee</label><select id='ae'></select></div></div><div class='grid' id='ak' style='margin-top:14px'></div><div style='display:none'><table id='atb'></table></div><div class='cal' id='cal' style='margin-top:14px'></div><div class='lgd'><span><i style='background:var(--blue)'></i>Present</span><span><i style='background:var(--org)'></i>Late / half day</span><span><i style='background:var(--red)'></i>Absent</span><span><i style='background:#6b7a90'></i>Holiday</span></div><div class='glass card' id='dd' style='margin-top:14px'></div></div>
+<div class='glass sec' id='lb'><h3>Today across the company</h3><div class='tbl'><table id='lt'></table></div></div>
+<div class='glass sec' id='asx'><h3>Working days, shift and holidays</h3><label>Working days</label><div class='pc' id='wdc'></div><div class='row'><div><label>Shift start</label><input type='time' id='ss'></div><div><label>Shift end</label><input type='time' id='se'></div><div><label>Grace (minutes)</label><input type='number' id='sg' min='0'></div></div><label>Holiday calendar</label><div class='row'><div><label>Date</label><input type='date' id='hd'></div><div><label>Holiday name</label><input id='hn' placeholder='e.g. Diwali'></div><div style='flex:0'><button class='btn' id='hadd'>Add holiday</button></div></div><div id='hl' style='margin-top:10px'></div></div></div>
+<div class='view' id='v-rep'><div class='glass sec' style='margin-top:0'><h3>Reports and analytics</h3><div class='row'><div><label>From</label><input type='date' id='r1'></div><div><label>To</label><input type='date' id='r2'></div><div><label>Branch</label><select id='rb'></select></div><div><label>Location</label><select id='rl'></select></div><div><label>View by</label><select id='rv'></select></div><div><label>Select</label><select id='rs'></select></div><div style='flex:0'><button class='btn' id='ex'>Export CSV</button></div><div style='flex:0'><button class='btn g' onclick='try{window.print()}catch(e){}'>Print</button></div></div><textarea id='csv' style='display:none;margin-top:12px' readonly></textarea></div><div class='grid' id='rk' style='margin-top:16px'></div><div class='g2' id='rcx'></div><div class='glass sec'><h3>Activity log</h3><div id='al'></div></div></div>
+<div class='view' id='v-roles'><div class='glass sec' style='margin-top:0'><h3>Roles and access</h3><div class='tbl'><table id='rt'></table></div><div class='sub' style='margin-top:10px'>Developer is not listed because it always has full, unrestricted access to every screen and action.</div></div><div class='glass sec' id='rf'><h3>Create a custom role</h3><div class='row'><div><label>Role name</label><input id='rn' placeholder='e.g. Plant Supervisor'></div><div><label>Branch scope</label><select id='rsb'></select></div><div><label>Location scope</label><select id='rsl'></select></div></div><label>Permissions</label><div class='pc' id='pc'></div><div style='margin-top:14px'><button class='btn' id='rcb'>Create role</button></div></div></div>
+<div class='view' id='v-usr'><div class='glass sec' style='margin-top:0'><div style='display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap'><h3 style='margin:0'>User management</h3><button class='btn' id='uadd'>Add user</button></div><div class='row' style='margin:14px 0'><div><label>Search</label><input id='uq' placeholder='Name or user ID'></div><div><label>Role</label><select id='ur'></select></div></div><div class='tbl'><table id='ut'></table></div></div></div>
+<div class='view' id='v-prof'><div class='pban'><div class='pcov'></div><div class='phd'><div class='av pav2' id='pav'></div><div><div class='pnm' id='pnm'></div><div class='sub' id='prl'></div><div class='pph-act'><button class='btn g' id='pphb' type='button'>Upload photo</button><button class='btn g' id='pphr' type='button'>Remove</button></div><div class='sub' style='margin-top:6px;font-size:12px'>JPG or PNG up to 5 MB. It is cropped to a square.</div><input type='file' id='pphf' accept='image/*' style='display:none'></div></div></div><div class='grid pst' id='pst'></div><div class='tabs' id='ptabs'><span class='on' data-t='d'>Details</span><span data-t='s'>Security</span><span data-t='a'>Activity</span></div><div class='g2 pg' style='margin-top:0'><div class='glass sec' id='pt-d'><h3>Personal details</h3><div class='fg'><div><label>User ID (locked)</label><input id='pid' disabled></div><div><label>Full name</label><input id='pn'></div><div><label>Phone</label><input id='pph'></div><div><label>Designation</label><input id='pds'></div><div><label>Branch (set by admin)</label><input id='pbr' disabled></div><div><label>Location (set by admin)</label><input id='plo' disabled></div></div><div style='margin-top:16px'><button class='btn' id='psv'>Save changes</button></div></div><div class='glass sec' id='pt-s'><h3>Change password</h3><div class='sub' style='margin-bottom:6px'>Use at least 6 characters. Mix upper and lower case, numbers and symbols for a stronger password.</div><label>Current password</label><input type='password' id='pc0'><label>New password</label><input type='password' id='pc1'><label>Confirm new password</label><input type='password' id='pc2'><div id='pmsg'></div><div style='margin-top:14px'><button class='btn' id='ppw'>Update password</button></div></div><div class='glass sec' id='pt-a'><h3>Recent activity</h3><div id='pact'></div></div></div></div>
+<div class="view" id="v-log"><div class="term">
+<div class="tbar"><span>kejmin-ops: activity log · developer only · read only</span><span id="lgk"></span></div>
+<div class="tfl"><div><label for="lgf1">--from</label><input type="date" id="lgf1"></div><div><label for="lgf2">--to</label><input type="date" id="lgf2"></div><div><label for="lgfu">--user</label><select id="lgfu"></select></div><div><label for="lgfc">--type</label><select id="lgfc"></select></div><div><label for="lgfq">grep</label><input id="lgfq" placeholder="task, user, action"></div><div><button class="tbtn" id="lgex">export csv</button></div></div>
+<div class="tbody"><div class="pr" id="lgp"></div><div class="sm" id="lgs"></div><div id="lgt"></div><div style="margin-top:8px"><button class="tbtn" id="lgmore" style="display:none">load more</button></div>
+<textarea id="lgcsv" style="display:none;margin-top:12px;width:100%;min-height:120px;background:#010409;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;font:inherit;padding:8px" readonly></textarea>
+<div class="pr" style="margin-top:12px" id="lgp2"></div></div>
+</div></div>
+<div class="view" id="v-blue"><div class="glass sec" style="margin-top:0"><h3>System map — Google Cloud / Firebase</h3>
+<div class="tbl"><svg viewBox="0 0 760 330" width="100%" style="min-width:680px">
+<rect class="bx" x="10" y="10" width="740" height="52" rx="12"/><text x="30" y="40">CLIENT · React/Vite PWA (this UI) · glass design · Web + Mobile · Bengaluru office + Plant 1 + Plant 2</text>
+<path d="M380 62v28" stroke="#ff8a1f" stroke-width="2"/>
+<rect class="bx bxo" x="10" y="90" width="740" height="52" rx="12"/><text x="30" y="120">API LAYER · Cloud Run / Firebase Functions · RBAC middleware · Workflow engine · Scoring engine</text>
+<path d="M380 142v28" stroke="#ff8a1f" stroke-width="2"/>
+<rect class="bx" x="10" y="170" width="240" height="64" rx="12"/><text x="26" y="196">Firebase Auth</text><g class="m"><text x="26" y="216">email + role custom claims</text></g>
+<rect class="bx" x="260" y="170" width="240" height="64" rx="12"/><text x="276" y="196">Firestore</text><g class="m"><text x="276" y="216">users · tasks · paths · scores</text></g>
+<rect class="bx" x="510" y="170" width="240" height="64" rx="12"/><text x="526" y="196">Cloud Storage</text><g class="m"><text x="526" y="216">proofs, photos, documents</text></g>
+<rect class="bx bxr" x="10" y="250" width="240" height="64" rx="12"/><text x="26" y="276">Cloud Scheduler + FCM</text><g class="m"><text x="26" y="296">due-date alerts, escalation</text></g>
+<rect class="bx bxr" x="260" y="250" width="240" height="64" rx="12"/><text x="276" y="276">BigQuery + Looker</text><g class="m"><text x="276" y="296">month / FY / custom analytics</text></g>
+<rect class="bx bxr" x="510" y="250" width="240" height="64" rx="12"/><text x="526" y="276">Audit log + Backups</text><g class="m"><text x="526" y="296">immutable history, DR</text></g>
+</svg></div></div>
+<div class="glass sec"><h3>Role hierarchy (top → bottom)</h3><div class="tbl"><svg viewBox="0 0 760 120" width="100%" style="min-width:680px">
+<g><rect class="bx bxr" x="5" y="30" width="110" height="46" rx="10"/><text x="20" y="58">Developer</text>
+<rect class="bx bxo" x="135" y="30" width="110" height="46" rx="10"/><text x="152" y="58">Owner</text>
+<rect class="bx" x="265" y="30" width="110" height="46" rx="10"/><text x="278" y="58">Finalizer</text>
+<rect class="bx" x="395" y="30" width="110" height="46" rx="10"/><text x="418" y="58">Auditor</text>
+<rect class="bx" x="525" y="30" width="110" height="46" rx="10"/><text x="535" y="50">Process</text><text x="535" y="66">Coordinator</text>
+<rect class="bx bxo" x="655" y="30" width="100" height="46" rx="10"/><text x="670" y="58">Plant Staff</text></g>
+<g stroke="#1456d9" stroke-width="2"><path d="M115 53h20M245 53h20M375 53h20M505 53h20M635 53h20"/></g></svg></div>
+<div class="sub">Custom roles can be created by Developer/Owner; each role = a set of permissions, branch and location scope.</div></div>
+<div class="glass sec"><h3>Task lifecycle</h3>
+<div class="path" style="margin-bottom:12px"><span class="st d">Created</span>›<span class="st d">Stage 1 · assignee</span>›<span class="st c">Stage 2…n · reviewers</span>›<span class="st">Final approval</span>›<span class="st">Closed</span></div>
+<div class="tbl"><table><tr><th>Event</th><th>Who can do it</th><th>What the system does</th></tr>
+<tr><td><b>Create task</b></td><td>Roles with "Create tasks"</td><td>Saves title, branch, location, importance, due date and the process path. Notifies the first assignee.</td></tr>
+<tr><td><b>Mark stage done</b></td><td>The person (or any member of the group) on the current stage</td><td>Moves the task to the next stage, writes a score event, adds a line to the audit log, notifies the next person.</td></tr>
+<tr><td><b>Send back</b></td><td>Auditor, Finalizer, Owner, Developer</td><td>Returns the task one stage, requires a reason, notifies the previous person. Points for the reversed stage are removed.</td></tr>
+<tr><td><b>Final approval</b></td><td>Last person on the path (usually Finalizer)</td><td>Closes the task, locks it from edits, adds proofs to the archive.</td></tr>
+<tr><td><b>Every action above</b></td><td>System</td><td>Writes a timestamped entry (who, what, when) to the log. Only a Developer can read it.</td></tr>
+<tr><td><b>Overdue</b></td><td>System (scheduler)</td><td>Flags the task in red, starts the escalation ladder below.</td></tr>
+<tr><td><b>Change path / reassign</b></td><td>Developer, Owner</td><td>Allowed only on open tasks. The change is logged with old and new assignee.</td></tr></table></div></div>
+
+<div class="glass sec"><h3>Scoring rules</h3><div class="two"><div>
+<table style="min-width:0"><tr><th>Importance</th><th>Base points</th></tr>
+<tr><td><span class="tag Low">Low</span></td><td>1</td></tr>
+<tr><td><span class="tag Medium">Medium</span></td><td>3</td></tr>
+<tr><td><span class="tag High">High</span></td><td>5</td></tr></table></div>
+<div><ul>
+<li>Points go to the person who completes a stage, one score event per stage.</li>
+<li>Finished on or before the due date: <b>1.5×</b> base points. After the due date: <b>1×</b>.</li>
+<li>A send-back removes the points for that stage; they are earned again when it is redone.</li>
+<li>Reports total points by employee, team (location), branch, month, financial year (1 Apr – 31 Mar) or any custom date range.</li>
+<li>Score events are append-only. Corrections are new events with negative points, never edits.</li></ul></div></div></div>
+
+<div class="glass sec"><h3>Notifications and escalation</h3><div class="tbl"><table><tr><th>When</th><th>Who is told</th><th>Channel</th></tr>
+<tr><td>Task assigned or sent back</td><td>New current assignee</td><td>Push + in-app</td></tr>
+<tr><td>1 day before due date</td><td>Current assignee</td><td>Push</td></tr>
+<tr><td>Due date, not done</td><td>Current assignee + Process Coordinator</td><td>Push + email</td></tr>
+<tr><td>1 day overdue</td><td>Finalizer of that location</td><td>Push + email</td></tr>
+<tr><td>3 days overdue</td><td>Company Owner</td><td>Email + daily digest</td></tr>
+<tr><td>Weekly summary (Monday 9:00 IST)</td><td>Owner, Finalizer, Auditor</td><td>Email</td></tr></table></div>
+<div class="sub">Cloud Scheduler runs the checks every hour. Reminder times are settings the Developer can change without a release.</div></div>
+
+<div class="glass sec"><h3>Attendance module</h3><div class="two"><div><ul>
+<li>Each employee records <b>check-in</b>, <b>break start / end</b> and <b>check-out</b> from the web app or plant mobile app.</li>
+<li>Working days follow a per-location calendar: weekly offs and a holiday list managed by Developer or Owner.</li>
+<li>Worked hours = check-out − check-in − breaks. Late arrival and short hours are flagged against the shift.</li></ul></div><div><ul>
+<li>Staff see only their own record. Coordinators see their team, Finalizer / Auditor / Owner see all locations they are scoped to.</li>
+<li>Monthly attendance rate by employee, team or location feeds Reports and the payroll input export (CSV).</li>
+<li>Corrections after the fact need a reason and are logged with the approver.</li></ul></div></div></div>
+
+<div class="glass sec"><h3>Data model (Firestore)</h3><div class="tbl"><table><tr><th>Collection</th><th>Key fields</th><th>Read</th><th>Write</th></tr>
+<tr><td><b>users</b></td><td>uid, name, email, role, branch, location, active</td><td>Self; admins all</td><td>Developer, Owner (via function)</td></tr>
+<tr><td><b>roles</b></td><td>name, permissions[], branchScope, locationScope</td><td>All signed-in users</td><td>Developer, Owner</td></tr>
+<tr><td><b>branches / locations</b></td><td>name, code, active</td><td>All signed-in users</td><td>Developer</td></tr>
+<tr><td><b>paths</b></td><td>name, stages[{assignee | group}]</td><td>Roles with "Design paths" + assignees</td><td>Roles with "Design paths"</td></tr>
+<tr><td><b>tasks</b></td><td>title, branch, location, priority, pathId, stage, dueAt, status, proofs[]</td><td>People on the path; roles with all-task scope</td><td>Create: "Create tasks". Stage change: function only</td></tr>
+<tr><td><b>scoreEvents</b></td><td>uid, taskId, points, reason, at</td><td>Self; "View all KPI" roles</td><td>Function only, append-only</td></tr>
+<tr><td><b>attendance</b></td><td>uid, date, in, out, breaks[], location, note</td><td>Self; coordinators for their team; admins</td><td>Self for today; corrections by approver</td></tr>
+<tr><td><b>holidays</b></td><td>date, location, name</td><td>All signed-in users</td><td>Developer, Owner</td></tr>
+<tr><td><b>auditLog</b></td><td>actor, action, target, before, after, at</td><td>Developer only</td><td>Function only, never edited or deleted</td></tr></table></div>
+<div class="sub">Stage changes, score events and audit entries are written by server functions, never directly from the browser. This is what stops a user from approving their own task or editing their own score.</div></div>
+
+<div class="glass sec"><h3>Security and operations</h3><div class="two"><div>
+<h4>Access</h4><ul>
+<li>Sign-in with Firebase Auth. Passwords are hashed by Firebase and never stored by the app.</li>
+<li>Role and scope live in custom claims; Firestore rules and the API both check them on every request.</li>
+<li>Two-step verification is required for Developer and Owner accounts.</li>
+<li>Deactivating a user ends their sessions straight away; their history stays.</li></ul></div><div>
+<h4>Data and recovery</h4><ul>
+<li>Hosted in the Mumbai region (asia-south1) so data stays in India.</li>
+<li>Daily Firestore export to a separate bucket, kept 30 days; monthly copy kept 1 year.</li>
+<li>Plant app works offline and syncs when the connection returns.</li>
+<li>Uploaded proofs: images and PDFs only, 10 MB limit, virus-scanned before they are attached.</li></ul></div></div></div>
+
+<div class="glass sec"><h3>Build roadmap to production</h3><ol>
+<li><b>Phase 1 (wk 1–2):</b> Firebase project, Auth, role claims, Firestore schema, security rules, audit log.</li>
+<li><b>Phase 2 (wk 3–5):</b> Task and configurable multi-stage path engine (individual or group per stage), send-back, user management screens.</li>
+<li><b>Phase 3 (wk 6–7):</b> Scoring engine, KPI dashboards (month / FY / date range), team scores, report export.</li>
+<li><b>Phase 4 (wk 8–9):</b> Attendance with holidays and breaks, notifications, escalation, file proofs, plant mobile PWA with offline mode.</li>
+<li><b>Phase 5 (wk 10–11):</b> Move prototype data into Firestore, UAT with Bengaluru and both plants, load test, backup restore drill, go-live on Cloud Run.</li></ol>
+<h4>Ready to go live when</h4><ul>
+<li>Every role has been tested against its row in the data model table, including attempts to read or write what it should not.</li>
+<li>A backup has been restored successfully into a test project.</li>
+<li>Owner and Developer accounts have two-step verification on.</li>
+<li>Each location has completed one full week of real tasks and attendance in UAT.</li></ul>
+<div class="sub" style="margin-top:12px"><b>Prototype today:</b> this screen set runs in the browser with sample data. Moving to production replaces browser storage with the collections above; the screens and flows stay the same.</div></div>
+<div class="glass sec" id="manual"><h3>User manual</h3>
+<div class="sub" style="margin-bottom:8px">How to use KEJMIN OPS day to day. Open a topic to read it. You only see the screens your role allows, so some topics will not apply to you.</div>
+
+<details open><summary>1. Getting started</summary><div>
+<p><b>Sign in</b></p><ol>
+<li>On the first screen choose <b>Sign in</b>.</li>
+<li>Type your <b>User ID</b> and <b>Password</b>. Use <b>Show</b> to check what you typed.</li>
+<li>Press <b>Sign in</b> or the Enter key. The app remembers you on this browser until you log out.</li></ol>
+<p><b>Create an account</b></p><ol>
+<li>Choose <b>Create account</b>.</li>
+<li>Fill in your full name, a User ID, a password and the same password again, then pick your branch and location.</li>
+<li>Press <b>Create account</b>. You are signed in straight away.</li></ol>
+<ul><li>User ID: 3 to 20 letters, numbers, dots or underscores. It cannot be changed later.</li>
+<li>Password: at least 6 characters.</li>
+<li>Your full name must be unique in the company.</li>
+<li>New accounts get the role <b>Process Coordinator</b> at Bengaluru Office and <b>Plant Staff</b> at the plants. An admin can change this under User management.</li></ul>
+<p><b>Sign out:</b> press <b>Log out</b> at the bottom of the left menu. Always do this on a shared computer.</p>
+<p><b>Moving around:</b> use the left menu. The top bar shows your name, role and location. On a computer, press the arrow at the top of the menu to retract it to a slim bar with just the logo and icons, which gives the page more room. Hover over the slim bar to see the full menu. Press the arrow again to keep the menu open.</p></div></details>
+
+<details><summary>2. Dashboard</summary><div>
+<p>Shows four counts: <b>Total tasks</b>, <b>In progress</b>, <b>Completed</b> and <b>High priority open</b>. Below them, <b>Branch workload</b> shows how your tasks are spread across MIS, Operations, Sales, Accounts &amp; Finance, Plant Coordination and HR.</p>
+<p>Developer, Owner, Finalizer and Auditor see every task. Everyone else sees only the tasks they are on the process path for.</p></div></details>
+
+<details><summary>3. Tasks: see, finish and send back</summary><div>
+<ol><li>Open <b>Tasks</b>. The tiles at the top count your tasks: <b>All tasks</b>, <b>Waiting on you</b>, <b>In progress</b>, <b>Overdue</b> and <b>Completed</b>. Click a tile to show only those tasks.</li>
+<li>Use <b>Search</b>, <b>Branch</b>, <b>Location</b>, <b>Importance</b> and <b>Sort by</b> to narrow the list. Switch between <b>List</b> and <b>Board</b> (Not started, In progress, Completed). The app remembers your choice.</li>
+<li>Each task card shows its branch, location, importance, due date and a stage tracker. A <b>blue tick</b> means that person has finished, the <b>orange ring</b> is whose turn it is, and <b>grey</b> circles are waiting.</li>
+<li>Cards with <b>Your turn</b> are waiting on you. Press <b>Mark done</b> when your stage is really finished. The task moves to the next person and you earn points.</li>
+<li>Click the task title to open a level-by-level view of who has done what.</li>
+<li>The due line turns red with <b>Overdue by N days</b> when the date has passed.</li></ol>
+<p><b>Send back:</b> if you are Auditor, Finalizer, Owner or Developer, a <b>Send back</b> button appears on tasks that are past their first stage. It returns the task one stage to the previous person.</p>
+<p>When the last person marks it done, the card shows <b>Completed</b>.</p>
+<div class="note">Only mark a stage done when the work is really finished. The next person is notified by the task moving to them, and your score is recorded at that moment.</div></div></details>
+
+<details><summary>4. Workflow builder: create a task</summary><div>
+<ol><li>Open <b>Workflow builder</b>.</li>
+<li>Enter the <b>Title</b>, then choose <b>Branch</b>, <b>Location</b> and <b>Importance</b> (Low, Medium or High).</li>
+<li>Optional: pick a <b>template</b> (Employee onboarding, Plant daily report, Invoice approval, Attendance and payroll input) to fill in the stages for you.</li>
+<li>Under <b>Process path</b>, choose a person for <b>Level 1</b>, <b>Level 2</b> and so on. Each level hands over to the next when marked done. Press <b>+ Add stage</b> for more levels.</li>
+<li>Press <b>Create task</b>. You land on the Tasks screen with the new task at the top.</li></ol>
+<p>A title and at least one stage are required. Levels left blank are skipped.</p>
+<div class="note">In this version a new task always gets a due date 5 days from today. A date picker is planned for the live system.</div></div></details>
+
+<details><summary>5. KPI and scores</summary><div>
+<ol><li>Open <b>KPI &amp; scores</b>.</li>
+<li>Choose <b>From</b> and <b>To</b> dates, or press <b>This month</b> or <b>Financial year</b> (from 1 April).</li>
+<li>Read the ranking: employee, score and a progress bar.</li></ol>
+<p>Points for each completed stage: <b>Low 1, Medium 3, High 5</b>. Finish on or before the due date and you get <b>1.5 times</b> the points. Managers (Developer, Owner, Finalizer, Auditor) see everyone. Other staff see only their own score.</p></div></details>
+
+<details><summary>6. Attendance</summary><div>
+<p>The Attendance screen has up to four tabs: <b>Today</b>, <b>My month</b>, <b>Team</b> and <b>Settings</b>.</p>
+<p><b>Clock in and out (Today tab)</b></p>
+<ol><li>Press <b>Clock in</b> when you start work. The time is saved.</li>
+<li>Press <b>Clock out</b> when you finish. Hours worked are shown.</li></ol>
+<p>You can clock in once a day. If you forget to clock out, the day shows <b>No clock-out</b> afterwards and an admin should be told to correct it.</p>
+<p><b>My month:</b> pick a month with the arrows. You see working days, present, late marks, absent, hours worked, overtime and attendance percentage, then a day-by-day table and a colour calendar (Present, Late / half day, Absent, Holiday). Click a day to see its details. Managers can pick another employee from the list.</p>
+<p><b>Team</b> (Developer, Owner, Finalizer, Auditor): each person's status, clock-in and clock-out times and hours across the company today.</p>
+<p><b>Settings</b> (Developer, Owner): tick the working days, set shift start, shift end and grace minutes, and add or remove holidays (date and name).</p>
+<div class="tbl"><table><tr><th>Status</th><th>Meaning</th></tr>
+<tr><td><b>Present</b></td><td>Clocked in within shift start plus grace minutes and worked at least 4 hours.</td></tr>
+<tr><td><b>Late</b></td><td>Clocked in after shift start plus grace minutes. Counts as a full day with a late mark.</td></tr>
+<tr><td><b>Half day</b></td><td>Worked less than 4 hours. Counts as half a day.</td></tr>
+<tr><td><b>Absent</b></td><td>Working day in the past with no clock-in.</td></tr>
+<tr><td><b>Working</b></td><td>Clocked in today and not yet clocked out.</td></tr>
+<tr><td><b>Not clocked in</b></td><td>Working day today and you have not clocked in yet.</td></tr>
+<tr><td><b>No clock-out</b></td><td>A past day with a clock-in but no clock-out.</td></tr>
+<tr><td><b>Holiday</b> / <b>Weekly off</b></td><td>Not a working day. Hours worked on these days count as overtime.</td></tr></table></div>
+<div class="note">Break tracking is part of the production plan (see the Attendance module above). For now the clock records only your in and out times.</div></div></details>
+
+<details><summary>7. Reports</summary><div>
+<ol><li>Open <b>Reports</b>.</li>
+<li>Set <b>From</b> and <b>To</b>, then narrow by <b>Branch</b> and <b>Location</b> if you wish.</li>
+<li>Use <b>View by</b> (Overall, Employee wise, Team wise or Role wise) and <b>Select</b> to focus on one person, team or role.</li>
+<li>Read the summary cards (total points, completion rate, overdue tasks, top performer) and the charts for employee scores, task status, importance mix, six-month trend, branch completion, team score and attendance rate.</li>
+<li>The <b>Activity log</b> at the bottom lists the latest actions.</li></ol>
+<p><b>Export CSV</b> opens a text box with the data and copies it. Paste it into Notepad or Excel and save it as a .csv file. <b>Print</b> opens your browser's print window, which can also save as PDF.</p></div></details>
+
+<details><summary>8. Roles and access</summary><div>
+<p>The table lists each role, its branch and location scope and the actions it may take: create tasks, design paths, approve or send back, view all KPI, export reports, manage roles and manage users.</p>
+<p><b>Create a custom role</b> (Developer and Owner only): enter a role name, pick the branch and location scope, tick the permissions and press <b>Create role</b>. The role can then be given to users in User management.</p></div></details>
+
+<details><summary>9. User management (Developer and Owner)</summary><div>
+<ul><li><b>Add user:</b> enter a User ID, full name, a temporary password (one is suggested), role, branch and location, then press <b>Create user</b>. Tell the person their temporary password; they can change it in My profile.</li>
+<li><b>Find users:</b> search by name or User ID, or filter by role.</li>
+<li><b>Edit:</b> change name, role, branch or location.</li>
+<li><b>Reset password:</b> a new password is suggested. Press <b>Reset</b> and share it with the user.</li>
+<li><b>Delete:</b> the user can no longer sign in. You are warned if tasks are waiting on them, and past scores stay in the history.</li></ul>
+<p>You cannot delete the account you are signed in with, and at least one Developer account must always remain.</p></div></details>
+
+<details><summary>10. My profile</summary><div>
+<ul><li><b>Details:</b> change your name, phone and designation, then press <b>Save changes</b>. User ID, branch and location are locked; ask an admin to change them.</li>
+<li><b>Profile picture:</b> press <b>Upload photo</b> in the banner at the top of My profile and choose a JPG or PNG up to 5 MB. It is cropped to a square and shown in the top bar, on your profile and in User management. Press <b>Remove</b> to go back to your initial.</li>
+<li><b>Security:</b> enter your current password, the new one twice, and press <b>Update password</b>. Use 6 or more characters; mixing upper and lower case, numbers and symbols makes it stronger.</li>
+<li><b>Activity:</b> your recent actions and your own task, points and attendance figures.</li></ul></div></details>
+
+<details><summary>11. What each role can see and do</summary><div>
+<div class="tbl"><table><tr><th>Role</th><th>Tasks and scores</th><th>Special actions</th></tr>
+<tr><td><b>Developer</b></td><td>All</td><td>Everything, including users, roles, attendance settings and the Log.</td></tr>
+<tr><td><b>Company Owner</b></td><td>All</td><td>Users, roles and attendance settings. Can send tasks back.</td></tr>
+<tr><td><b>Finalizer</b></td><td>All</td><td>Can send tasks back. Sees the Team attendance tab.</td></tr>
+<tr><td><b>Auditor</b></td><td>All</td><td>Can send tasks back. Sees the Team attendance tab.</td></tr>
+<tr><td><b>Process Coordinator</b></td><td>Own tasks and own score</td><td>Finishes stages assigned to them.</td></tr>
+<tr><td><b>Plant Staff</b></td><td>Own tasks and own score</td><td>Finishes stages assigned to them.</td></tr></table></div>
+<p class="sub">Custom roles follow the permissions ticked when they were created.</p></div></details>
+
+<details><summary>12. Log (Developer only)</summary><div>
+<p>The <b>Log</b> menu appears only for Developer accounts. It keeps a timestamped record of what people do in the app. Each line shows the <b>time</b> (date, hours, minutes, seconds), the <b>user</b>, the <b>type</b> and <b>what happened</b>.</p>
+<div class="tbl"><table><tr><th>Type</th><th>What is recorded</th></tr>
+<tr><td><b>Sign-in</b></td><td>Successful sign-ins and sign-outs.</td></tr>
+<tr><td><b>Security</b></td><td>Failed sign-in attempts, password changes and password resets. Passwords themselves are never recorded.</td></tr>
+<tr><td><b>Task</b></td><td>Task created (with branch, location, importance, due date and path), each stage completed with the points earned, and tasks sent back.</td></tr>
+<tr><td><b>User</b></td><td>Users created, new accounts registered, and changes to name, role, branch, location, phone or designation.</td></tr>
+<tr><td><b>Delete</b></td><td>Users deleted and holidays removed.</td></tr>
+<tr><td><b>Attendance</b></td><td>Clock in and out, working days, shift times, grace minutes and holidays added.</td></tr>
+<tr><td><b>Role</b></td><td>Custom roles created, with their permissions.</td></tr>
+<tr><td><b>Export</b></td><td>Report CSV exports and printouts.</td></tr>
+<tr><td><b>Upload</b></td><td>Reserved for file uploads. The app has no upload feature yet, so nothing appears here for now.</td></tr></table></div>
+<p><b>Find something:</b> set <b>From</b> and <b>To</b> dates (the last 30 days are shown at first), then narrow by <b>User</b>, <b>Type</b> or <b>Search</b> text. The summary line under the command shows how many events, users, events today and deletions match. The newest 200 lines are listed; press <b>load more</b> for older ones.</p>
+<p><b>export csv</b> puts the filtered lines in a text box and copies them. Paste into Excel or Notepad and save as .csv.</p>
+<div class="note">Nobody can edit or clear log entries from the app. In this prototype the log is kept in the browser, holds the latest 4,000 events and uses that computer's clock. The live system will keep it on the server where it cannot be changed.</div></div></details>
+
+<details><summary>13. Questions and fixes</summary><div>
+<div class="tbl"><table><tr><th>Problem</th><th>What to do</th></tr>
+<tr><td>I cannot sign in</td><td>Check the User ID and password (passwords are case sensitive). If you forgot it, ask a Developer or Owner for a reset.</td></tr>
+<tr><td>"That user ID is already taken" when signing up</td><td>Choose another ID, for example your first name, a dot and your initial.</td></tr>
+<tr><td>I do not see a menu item</td><td>Your role does not include it. Ask an admin if you need access.</td></tr>
+<tr><td>There is no Mark done button on my task</td><td>The task is waiting on someone earlier in the path, or it is already finished. Open the task to see whose turn it is.</td></tr>
+<tr><td>My day shows Late but I was on time</td><td>The shift start and grace minutes in Attendance settings decide this. Ask an admin to check them.</td></tr>
+<tr><td>My day shows No clock-out</td><td>You did not clock out. Ask an admin for a correction.</td></tr>
+<tr><td>Export CSV shows a box instead of a file</td><td>This is expected. Copy the text, paste it into Notepad or Excel and save it as .csv.</td></tr>
+<tr><td>My data is different on another computer</td><td>This version stores data in the browser it is used on. Use one computer, or wait for the live system where everyone shares the same data.</td></tr></table></div></div></details>
+
+<div class="note"><b>About this version:</b> KEJMIN OPS is currently a working prototype. Accounts, attendance and settings are saved in your own browser, and tasks and scores start from sample data each time the page loads. The sections above this manual describe how the live, shared system will work.</div>
+</div>
+</div>
+</main></section>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const W={Low:1,Medium:3,High:5},BR=["MIS","Operations","Sales","Accounts & Finance","Plant Coordination","HR"],LC=["Bengaluru Office","Plant 1","Plant 2"];
+const U={developer:["Dev Admin","Developer","All"],owner:["Mr. Kej","Company Owner","All"],finalizer:["Rohit Rao","Finalizer","Bengaluru Office"],auditor:["Meera Nair","Auditor","Bengaluru Office"],asha:["Asha K","Process Coordinator","Bengaluru Office"],kiran:["Kiran P","Plant Staff","Plant 1"],suresh:["Suresh M","Plant Staff","Plant 2"]};
+const day=n=>{const d=new Date();d.setDate(d.getDate()-n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+let T=[{t:"Monthly MIS report",b:"MIS",l:"Bengaluru Office",p:"High",due:day(-3),path:["Asha K","Meera Nair","Rohit Rao"],i:1},
+{t:"Plant 1 dispatch log",b:"Operations",l:"Plant 1",p:"Medium",due:day(-1),path:["Kiran P","Asha K","Rohit Rao"],i:0},
+{t:"Vendor invoice check",b:"Accounts & Finance",l:"Bengaluru Office",p:"High",due:day(-5),path:["Asha K","Meera Nair"],i:2},
+{t:"Plant 2 safety checklist",b:"Plant Coordination",l:"Plant 2",p:"Low",due:day(-2),path:["Suresh M","Meera Nair","Rohit Rao"],i:0},
+{t:"Sales lead follow-up",b:"Sales",l:"Bengaluru Office",p:"Medium",due:day(-4),path:["Asha K","Rohit Rao"],i:0}];
+let L=[["Asha K",5,2],["Kiran P",3,4],["Meera Nair",3,6],["Suresh M",1,9],["Asha K",3,12],["Kiran P",5,20],["Meera Nair",5,35],["Asha K",1,50],["Suresh M",3,80],["Rohit Rao",5,3]].map(x=>({n:x[0],pts:x[1],d:day(x[2])}));
+let me=null,stages=["",""];
+$("#chips").innerHTML=Object.keys(U).map(k=>`<span class="chip" data-k="${k}">${U[k][1]}</span>`).join("");
+$("#out").onclick=()=>{try{localStorage.removeItem("kj")}catch(e){}$("#app").style.display="none";$("#login").style.display="grid";$("#bye").style.display="block"};
+function enter(k){me=U[k];$("#login").style.display="none";$("#app").style.display="block";$("#wl").textContent="Welcome, "+me[0];$("#wr").textContent=me[1]+" · "+me[2];$("#av").textContent=me[0][0];$("#loc").textContent=me[2];fill();show("dash");render()}
+const all=()=>["Developer","Company Owner","Finalizer","Auditor"].includes(me[1]);
+const mine=()=>all()?T:T.filter(t=>t.path.includes(me[0]));
+$$(".nav").forEach(n=>n.onclick=()=>show(n.dataset.v));
+function show(v){$$(".nav").forEach(n=>n.classList.toggle("on",n.dataset.v==v));$$(".view").forEach(x=>x.classList.toggle("on",x.id=="v-"+v));render()}
+function fill(){$("#fb").innerHTML=BR.map(x=>`<option>${x}</option>`).join("");$("#fl").innerHTML=LC.map(x=>`<option>${x}</option>`).join("");drawStg();
+$("#d1").value=day(30);$("#d2").value=day(0)}
+function drawStg(){const names=[...new Set(L.map(x=>x.n)),"Rohit Rao"];$("#stg").innerHTML=stages.map((s,i)=>`<div><label>Level ${i+1}</label><select data-i="${i}">${["",...[...new Set(names)]].map(n=>`<option ${n==s?"selected":""}>${n}</option>`).join("")}</select></div>`).join("");
+$$("#stg select").forEach(s=>s.onchange=()=>stages[s.dataset.i]=s.value)}
+$("#as").onclick=()=>{stages.push("");drawStg()};
+$("#ct").onclick=()=>{const p=stages.filter(Boolean);if(!$("#ft").value||!p.length)return alert("Add a title and at least one stage.");
+T.unshift({t:$("#ft").value,b:$("#fb").value,l:$("#fl").value,p:$("#fp").value,due:day(-5),path:p,i:0});$("#ft").value="";stages=["",""];drawStg();show("tasks")};
+function adv(i){const t=T[i];const early=t.due>=day(0);L.push({n:t.path[t.i],pts:Math.round(W[t.p]*(early?1.5:1)*10)/10,d:day(0)});t.i++;render()}
+window.adv=adv;
+function render(){if(!me)return;const m=mine(),open=m.filter(t=>t.i<t.path.length),done=m.length-open.length;
+$("#stats").innerHTML=[["Total tasks",m.length,""],["In progress",open.length,"o"],["Completed",done,""],["High priority open",open.filter(t=>t.p=="High").length,"r"]].map((s,i)=>`<div class="glass card" style="animation-delay:${i*.08}s"><div class="sub">${s[0]}</div><div class="big ${s[2]}">${s[1]}</div></div>`).join("");
+$("#br").innerHTML=BR.map(b=>{const n=m.filter(t=>t.b==b).length;return `<div style="display:flex;gap:12px;align-items:center;margin:8px 0"><span style="width:150px">${b}</span><div class="bar" style="flex:1"><i style="width:${m.length?n/m.length*100:0}%"></i></div><b>${n}</b></div>`}).join("");
+kpi()}
+function kpi(){const a=$("#d1").value,b=$("#d2").value,s={};L.filter(x=>x.d>=a&&x.d<=b&&(all()||x.n==me[0])).forEach(x=>s[x.n]=(s[x.n]||0)+x.pts);
+const r=Object.entries(s).sort((x,y)=>y[1]-x[1]),mx=r[0]?r[0][1]:1;
+$("#kt").innerHTML="<tr><th>#</th><th>Employee</th><th>Score</th><th>Progress</th></tr>"+(r.map((x,i)=>`<tr><td>${i+1}</td><td><b>${x[0]}</b></td><td>${x[1]}</td><td><div class="bar"><i style="width:${x[1]/mx*100}%"></i></div></td></tr>`).join("")||"<tr><td colspan=4>No scores in this range.</td></tr>")}
+$("#d1").onchange=$("#d2").onchange=kpi;
+$$("[data-p]").forEach(b=>b.onclick=()=>{const n=new Date();$("#d2").value=day(0);$("#d1").value=b.dataset.p=="m"?n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-01":(n.getMonth()>=3?n.getFullYear():n.getFullYear()-1)+"-04-01";kpi()});
+T.push({t:'GST filing data',b:'Accounts & Finance',l:'Bengaluru Office',p:'High',due:day(2),path:['Asha K','Meera Nair','Rohit Rao'],i:0},{t:'New joiner documents',b:'HR',l:'Bengaluru Office',p:'Medium',due:day(-6),path:['Asha K','Meera Nair'],i:1});
+const NM={};Object.values(U).forEach(u=>NM[u[0]]=u[2]);
+let A=[{d:day(1),s:'Meera Nair approved Vendor invoice check'},{d:day(2),s:'Kiran P completed stage 1 of Plant 1 dispatch log'}],CSV='';
+const TP={'Blank':[],'Employee onboarding (HR)':['Asha K','Meera Nair','Rohit Rao'],'Plant daily report':['Kiran P','Asha K','Meera Nair','Rohit Rao'],'Invoice approval':['Asha K','Meera Nair','Rohit Rao'],'Attendance and payroll input':['Asha K','Meera Nair','Rohit Rao']};
+$('#tp').innerHTML=Object.keys(TP).map(k=>`<option>${k}</option>`).join('');
+$('#tp').onchange=()=>{const p=TP[$('#tp').value];stages=p.length?[...p]:['',''];drawStg()};
+const _adv=adv;adv=function(i){const t=T[i];A.unshift({d:day(0),s:`${t.path[t.i]} completed stage ${t.i+1} of ${t.t}`});_adv(i)};window.adv=adv;
+function rejBtn(i){const t=T[i];return t.i>0&&t.i<t.path.length&&['Auditor','Finalizer','Developer','Company Owner'].includes(me[1])?` <button class='btn g' onclick='rej(${i})'>Send back</button>`:''}
+function rej(i){T[i].i--;A.unshift({d:day(0),s:`${me[0]} sent back ${T[i].t} to ${T[i].path[T[i].i]}`});render()}window.rej=rej;window.rejBtn=rejBtn;
+const opt=a=>['All',...a].map(x=>`<option>${x}</option>`).join('');
+$('#rb').innerHTML=opt(BR);$('#rl').innerHTML=opt(LC);$('#rsb').innerHTML=opt(BR);$('#rsl').innerHTML=opt(LC);
+$('#r1').value=day(90);$('#r2').value=day(0);['r1','r2','rb','rl'].forEach(id=>$('#'+id).onchange=rep);
+const r1=v=>Math.round(v*10)/10;
+function hb(rows,mx,suf=''){return rows.map(r=>`<div style='display:flex;gap:10px;align-items:center;margin:8px 0'><span style='width:125px;font-size:13px'>${r[0]}</span><div class='bar' style='flex:1'><i style='width:${mx?r[1]/mx*100:0}%'></i></div><b style='width:48px;text-align:right'>${r[1]}${suf}</b></div>`).join('')||'<div class=sub>No data for these filters.</div>'}
+function dn(ps){const n=ps.reduce((s,p)=>s+p[1],0),t=n||1;let off=25;const g=ps.map(p=>{const v=p[1]/t*100,e=`<circle cx='21' cy='21' r='15.9155' fill='none' stroke='${p[2]}' stroke-width='6' stroke-dasharray='${v} ${100-v}' stroke-dashoffset='${off}'/>`;off-=v;return e}).join('');return `<div style='display:flex;align-items:center;gap:18px;flex-wrap:wrap'><svg viewBox='0 0 42 42' width='140'><circle cx='21' cy='21' r='15.9155' fill='none' stroke='rgba(120,140,170,.2)' stroke-width='6'/>${g}<text x='21' y='23' text-anchor='middle' style='font-size:8px'>${n}</text></svg><div class='lgd' style='flex-direction:column;gap:6px'>${ps.map(p=>`<span><i style='background:${p[2]}'></i>${p[0]} · ${p[1]}</span>`).join('')}</div></div>`}
+function ln(v,lb){const w=360,h=150,m=Math.max(...v,1),x=i=>30+i*(w-50)/(v.length-1),y=q=>h-26-q/m*(h-50);return `<svg viewBox='0 0 ${w} ${h}' width='100%'><line x1='30' y1='${h-26}' x2='${w-20}' y2='${h-26}' stroke='rgba(120,140,170,.4)'/><polyline points='${v.map((q,i)=>x(i)+','+y(q)).join(' ')}' fill='none' stroke='#1d4f9f' stroke-width='2.5' stroke-dasharray='600' stroke-dashoffset='600'><animate attributeName='stroke-dashoffset' to='0' dur='1s' fill='freeze'/></polyline>${v.map((q,i)=>`<circle cx='${x(i)}' cy='${y(q)}' r='4' fill='#c9772a'/><text x='${x(i)}' y='${y(q)-9}' text-anchor='middle' style='font-size:10px'>${q}</text><text x='${x(i)}' y='${h-8}' text-anchor='middle' style='font-size:10px;font-weight:400'>${lb[i]}</text>`).join('')}</svg>`}
+function rep(){if(!me)return;const a=$('#r1').value,b=$('#r2').value,fb=$('#rb').value,fl=$('#rl').value;
+const vm=$('#rv').value,vs=$('#rs').value,inV=n=>vm=='Overall'||vs=='All'||(vm=='Employee wise'?n==vs:vm=='Team wise'?NM[n]==vs:RL[n]==vs);const base=L.filter(x=>(all()||x.n==me[0])&&(fl=='All'||NM[x.n]==fl)&&inV(x.n)),ev=base.filter(x=>x.d>=a&&x.d<=b);
+const tk=mine().filter(t=>(fb=='All'||t.b==fb)&&(fl=='All'||t.l==fl)&&(vm=='Overall'||vs=='All'||t.path.some(inV)));
+const dn_=tk.filter(t=>t.i>=t.path.length).length,od=tk.filter(t=>t.i<t.path.length&&t.due<day(0)).length,pr=tk.length-dn_-od;
+const by={},lo={};ev.forEach(x=>{by[x.n]=(by[x.n]||0)+x.pts;const k=NM[x.n]||'Other';lo[k]=(lo[k]||0)+x.pts});
+const emp=Object.entries(by).map(e=>[e[0],r1(e[1])]).sort((x,y)=>y[1]-x[1]),loc=Object.entries(lo).map(e=>[e[0],r1(e[1])]).sort((x,y)=>y[1]-x[1]);
+const ms=[...Array(6)].map((_,k)=>{const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-(5-k));return d}),key=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+const tr=ms.map(d=>r1(base.filter(x=>x.d.slice(0,7)==key(d)).reduce((s,x)=>s+x.pts,0))),tot=r1(ev.reduce((s,x)=>s+x.pts,0));
+$('#rk').innerHTML=[['Total points',tot,''],['Completion rate',(tk.length?Math.round(dn_/tk.length*100):0)+'%',''],['Overdue tasks',od,'r'],['Top performer',emp[0]?emp[0][0]:'-','o']].map((s,i)=>`<div class='glass card' style='animation-delay:${i*.08}s'><div class='sub'>${s[0]}</div><div class='big ${s[2]}' style='${s[0]=='Top performer'?'font-size:22px;padding-top:6px':''}'>${s[1]}</div></div>`).join('');
+const br=BR.map(x=>[x,tk.filter(t=>t.b==x).length?Math.round(tk.filter(t=>t.b==x&&t.i>=t.path.length).length/tk.filter(t=>t.b==x).length*100):0]).filter(x=>tk.some(t=>t.b==x[0]));
+const card=(h,c)=>`<div class='glass sec'><h3>${h}</h3>${c}</div>`;
+$('#rcx').innerHTML=card('Employee scores (selected dates)',hb(emp,emp[0]?emp[0][1]:0))+card('Task status',dn([['Completed',dn_,C[0]],['In progress',pr,C[1]],['Overdue',od,C[2]]]))+card('Importance mix',dn(['Low','Medium','High'].map((p,i)=>[p,tk.filter(t=>t.p==p).length,C[i]])))+card('Points trend, last 6 months',ln(tr,ms.map(d=>d.toLocaleString('en',{month:'short'}))))+card('Branch completion',hb(br,100,'%'))+card('Team score by location',hb(loc,loc[0]?loc[0][1]:0))+card('Attendance rate',attRate(a,b,inV,fl))+(vm=='Overall'?'':card(vm+' breakdown',brkT(vm,a,b)));
+$('#al').innerHTML=A.slice(0,8).map(x=>`<div style='padding:7px 0;border-top:1px solid var(--bd)'><span class='sub'>${x.d}</span> &nbsp; ${x.s}</div>`).join('');
+CSV=['Employee,Location,Points',...emp.map(e=>`${e[0]},${NM[e[0]]||''},${e[1]}`),'','Task,Branch,Location,Importance,Stage',...tk.map(t=>`${t.t},${t.b},${t.l},${t.p},${Math.min(t.i+1,t.path.length)}/${t.path.length}`)].join('\n')}
+const C=['#1d4f9f','#c9772a','#b83a2e'];
+$('#ex').onclick=()=>{const t=$('#csv');t.style.display='block';t.value=CSV;t.select();try{document.execCommand('copy')}catch(e){}};
+const PERM=['Create tasks','Design paths','Approve / send back','View all KPI','Export reports','Manage roles','Manage users'];
+let R=[{n:'Developer',sb:'All',sl:'All',p:[0,1,2,3,4,5,6]},{n:'Company Owner',sb:'All',sl:'All',p:[0,1,2,3,4,5]},{n:'Finalizer',sb:'All',sl:'Bengaluru Office',p:[0,2,3,4]},{n:'Auditor',sb:'All',sl:'Bengaluru Office',p:[2,3,4]},{n:'Process Coordinator',sb:'Own branch',sl:'Bengaluru Office',p:[0]},{n:'Plant Staff',sb:'Plant Coordination',sl:'Plant 1, Plant 2',p:[0]}];
+const BUILTIN=['Developer','Company Owner','Finalizer','Auditor','Process Coordinator','Plant Staff'],scTxt=r=>(r.sb=='All'?'All branches':r.sb)+' / '+(r.sl=='All'?'all locations':r.sl),svR=()=>{try{localStorage.setItem('kjroles',JSON.stringify(R))}catch(e){}};
+try{const x=JSON.parse(localStorage.getItem('kjroles'));if(Array.isArray(x)&&x.length&&x.every(r=>r.n&&Array.isArray(r.p)&&r.sb&&r.sl))R=x}catch(e){}
+$('#pc').innerHTML=PERM.map((p,i)=>`<label><input type='checkbox' value='${i}'>${p}</label>`).join('');
+function rol(){const ad=['Developer','Company Owner'].includes(me[1]);$('#rt').innerHTML='<tr><th>Role</th><th>Scope</th>'+PERM.map(p=>`<th>${p}</th>`).join('')+(ad?'<th></th>':'')+'</tr>'+R.map((r,ri)=>r.n=='Developer'?'':`<tr><td><b>${r.n}</b></td><td>${scTxt(r)}</td>${PERM.map((_,i)=>`<td class='ok'>${r.p.includes(i)?'✓':''}</td>`).join('')}${ad?`<td><button class='btn g' data-ri='${ri}'>Edit</button></td>`:''}</tr>`).join('');$('#rf').style.display=ad?'':'none'}
+$('#rt').onclick=e=>{const b=e.target.closest('[data-ri]');if(b&&['Developer','Company Owner'].includes(me[1]))rEdit(+b.dataset.ri)};
+function rEdit(i){const r=R[i],lock=BUILTIN.includes(r.n),dev=false,bo=[...new Set(['All',...BR,r.sb])],lo=[...new Set(['All',...LC,r.sl])];
+const o=mdl(`<h3>Edit role</h3><label>Role name</label><input id='a1' value='${esc(r.n)}' ${lock?'disabled':''}>${lock?"<div class='sub' style='margin-top:6px'>Built-in role names are fixed because the app's access rules depend on them. Scope and permissions can be changed.</div>":''}<label>Branch scope</label><select id='a2'>${sel(bo,r.sb)}</select><label>Location scope</label><select id='a3'>${sel(lo,r.sl)}</select><label>Permissions</label><div class='pc' id='a4'>${PERM.map((p,k)=>`<label><input type='checkbox' value='${k}' ${r.p.includes(k)||dev?'checked':''} ${dev?'disabled':''}>${p}</label>`).join('')}</div>${dev?"<div class='sub' style='margin-top:6px'>Developer always keeps every permission.</div>":''}<div id='mm'></div>${btns('Save changes')}`);
+q$(o,'#mok').onclick=()=>{const n=lock?r.n:q$(o,'#a1').value.trim();if(!n)return msg(o,'Role name is required.');if(!lock&&R.some((x,j)=>j!=i&&x.n.toLowerCase()==n.toLowerCase()))return msg(o,'A role with that name already exists.');
+const np=dev?PERM.map((_,k)=>k):[...o.querySelectorAll('#a4 input:checked')].map(c=>+c.value),sb=q$(o,'#a2').value,sl=q$(o,'#a3').value,ch=[];
+if(n!==r.n)ch.push(`renamed from "${r.n}"`);if(sb!==r.sb||sl!==r.sl)ch.push(`scope ${scTxt(r)} to ${scTxt({sb,sl})}`);
+const ad=np.filter(k=>!r.p.includes(k)).map(k=>PERM[k]),rm=r.p.filter(k=>!np.includes(k)).map(k=>PERM[k]);if(ad.length)ch.push('added '+ad.join(', '));if(rm.length)ch.push('removed '+rm.join(', '));
+if(!ch.length){o.remove();return toast('No changes')}
+const old=r.n;if(n!==old){Object.values(U).forEach(u=>{if(u[1]==old)u[1]=n});svU();}
+r.n=n;r.sb=sb;r.sl=sl;r.p=np;svR();rebuild();A.unshift({d:day(0),s:`${me[0]} updated role ${n}`});logEv('Role',`updated role "${n}": ${ch.join('; ')}`);o.remove();render();toast('Role updated')}}
+$('#rcb').onclick=()=>{const n=$('#rn').value.trim();if(!n)return;if(R.some(x=>x.n.toLowerCase()==n.toLowerCase()))return toast('A role with that name already exists');R.push({n,sb:$('#rsb').value,sl:$('#rsl').value,p:$$('#pc input:checked').map(c=>+c.value)});svR();A.unshift({d:day(0),s:`${me[0]} created role ${n}`});$('#rn').value='';$$('#pc input').forEach(c=>c.checked=false);render()};
+const _r0=render;render=function(){if(!me)return;_r0();rep();rol();att();attX();usr();prof();navAcl()};
+const RL={},EMP=Object.values(U).map(u=>u[0]),DN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],pad=n=>String(n).padStart(2,'0');Object.values(U).forEach(u=>RL[u[0]]=u[1]);
+const RS={'Employee wise':EMP,'Team wise':LC,'Role wise':[...new Set(Object.values(U).map(u=>u[1]))]};
+function fs(){const v=$('#rv').value;$('#rs').innerHTML=v=='Overall'?'<option>All</option>':opt(RS[v]);$('#rs').disabled=v=='Overall'}
+$('#rv').innerHTML=['Overall','Employee wise','Team wise','Role wise'].map(x=>`<option>${x}</option>`).join('');$('#rv').onchange=()=>{fs();rep()};$('#rs').onchange=rep;fs();
+let AS={wd:[1,2,3,4,5,6],st:'09:30',en:'18:30',gr:15,H:[{d:'2026-10-02',n:'Gandhi Jayanti'},{d:'2026-11-01',n:'Kannada Rajyotsava'},{d:'2026-11-08',n:'Diwali'},{d:'2026-12-25',n:'Christmas'},{d:'2027-01-26',n:'Republic Day'}]},AT={};
+const ld=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()),TD=()=>ld(new Date()),tm=d=>pad(d.getHours())+':'+pad(d.getMinutes()),mins=s=>+s.slice(0,2)*60+ +s.slice(3),fh=h=>Math.floor(h)+'h '+pad(Math.round(h%1*60))+'m';
+const isH=s=>AS.H.find(h=>h.d==s),isWD=s=>AS.wd.includes(new Date(s+'T00:00:00').getDay())&&!isH(s),hrs=r=>r&&r.o?(mins(r.o)-mins(r.i))/60:0,sv=()=>{try{localStorage.setItem('kjat',JSON.stringify({AT,AS}))}catch(e){}};
+try{const s=JSON.parse(localStorage.getItem('kjat'));if(s&&s.AT){AT=s.AT;AS=s.AS}}catch(e){}
+if(!Object.keys(AT).length){EMP.forEach((n,e)=>{AT[n]={};for(let k=1;k<=60;k++){const d=new Date();d.setDate(d.getDate()-k);const s=ld(d);if(!isWD(s))continue;const q=(k*7+e*5)%11;if(q==0)continue;const m=q<3?60+q*5:20+q;AT[n][s]={i:pad(9+Math.floor(m/60))+':'+pad(m%60),o:q==5?'14:05':'18:'+pad(20+q*2)}}})}
+function stt(n,s){const rc=(AT[n]||{})[s],h=isH(s);if(h)return'Holiday';if(!AS.wd.includes(new Date(s+'T00:00:00').getDay()))return'Weekly off';if(!rc)return s>TD()||s<(JD[n]||'')?'':s==TD()?'Not clocked in':'Absent';if(!rc.o)return s==TD()?'Working':'No clock-out';if(hrs(rc)<4)return'Half day';return mins(rc.i)>mins(AS.st)+AS.gr?'Late':'Present'}
+function stats(n,from,to){let w=0,p=0,l=0,ab=0,h=0,ot=0;const sh=(mins(AS.en)-mins(AS.st))/60;for(let d=new Date(from+'T00:00:00');ld(d)<=to&&ld(d)<=TD();d.setDate(d.getDate()+1)){const s=ld(d),rc=(AT[n]||{})[s];if(!isWD(s)){if(rc&&rc.o){h+=hrs(rc);ot+=hrs(rc)}continue}if(s==TD()&&!rc)continue;const t=stt(n,s);if(!t)continue;w++;if(t=='Absent')ab++;else if(t=='Half day')p+=.5;else{p++;if(t=='Late')l++}if(rc&&rc.o){const x=hrs(rc);h+=x;ot+=Math.max(0,x-sh)}}return{w,p,l,ab,h:r1(h),ot:r1(ot),pct:w?Math.round(p/w*100):0}}
+function attRate(a,b,inV,fl){return hb(EMP.filter(n=>inV(n)&&(fl=='All'||NM[n]==fl)&&(all()||n==me[0])).map(n=>[n,stats(n,a,b).pct]),100,'%')}
+function brkT(vm,a,b){const gk=n=>vm=='Employee wise'?n:vm=='Team wise'?NM[n]:RL[n],gs=[...new Set(EMP.map(gk))];return `<div class='tbl'><table><tr><th>${vm.replace(' wise','')}</th><th>Points</th><th>Tasks</th><th>Done</th><th>Attendance</th><th>Hours</th></tr>`+gs.map(g=>{const m=EMP.filter(n=>gk(n)==g&&(all()||n==me[0]));if(!m.length)return'';const p=r1(L.filter(x=>m.includes(x.n)&&x.d>=a&&x.d<=b).reduce((s,x)=>s+x.pts,0)),tt=T.filter(t=>t.path.some(n=>m.includes(n))),dd=tt.filter(t=>t.i>=t.path.length).length,st=m.map(n=>stats(n,a,b));return `<tr><td><b>${g}</b></td><td>${p}</td><td>${tt.length}</td><td>${dd}</td><td>${Math.round(st.reduce((s,x)=>s+x.pct,0)/m.length)}%</td><td>${r1(st.reduce((s,x)=>s+x.h,0))}</td></tr>`}).join('')+'</table></div>'}
+function att(){if(!me)return;const mg=['Developer','Company Owner','Finalizer','Auditor'].includes(me[1]),ad=['Developer','Company Owner'].includes(me[1]),td=TD(),rec=(AT[me[0]]||{})[td];
+$('#cs').textContent=!rec?'You have not clocked in today':rec.o?`In ${rec.i} · Out ${rec.o} · ${fh(hrs(rec))}`:`Clocked in at ${rec.i}`;$('#ci').disabled=!!rec;$('#co').disabled=!rec||!!rec.o;
+if(!$('#am').value)$('#am').value=td.slice(0,7);if(!$('#ae').options.length){$('#ae').innerHTML=EMP.map(x=>`<option>${x}</option>`).join('');$('#ae').value=me[0]}
+$('#aew').style.display=mg?'':'none';const en=mg?$('#ae').value:me[0],mo=$('#am').value,fr=mo+'-01',la=ld(new Date(+mo.slice(0,4),+mo.slice(5,7),0)),to=la<td?la:td,s=stats(en,fr,to);
+$('#ak').innerHTML=[['Working days',s.w,''],['Present',s.p,''],['Late marks',s.l,'o'],['Absent',s.ab,'r'],['Hours worked',s.h,''],['Overtime (h)',s.ot,'o'],['Attendance',s.pct+'%','']].map((x,i)=>`<div class='glass card' style='animation-delay:${i*.05}s'><div class='sub'>${x[0]}</div><div class='big ${x[2]}'>${x[1]}</div></div>`).join('');
+let rows='';for(let d=new Date(to+'T00:00:00');ld(d)>=fr;d.setDate(d.getDate()-1)){const k=ld(d),rc=(AT[en]||{})[k],t=stt(en,k),h=isH(k);rows+=`<tr><td>${k}</td><td>${DN[d.getDay()]}</td><td><span class='tag ${t.replace(/[ -]/g,'')}'>${t}</span>${h?` <span class='sub'>${h.n}</span>`:''}</td><td>${rc?rc.i:'-'}</td><td>${rc&&rc.o?rc.o:'-'}</td><td>${rc&&rc.o?fh(hrs(rc)):'-'}</td></tr>`}
+$('#atb').innerHTML='<tr><th>Date</th><th>Day</th><th>Status</th><th>Clock in</th><th>Clock out</th><th>Hours</th></tr>'+rows;
+$('#lb').style.display=mg?'':'none';$('#lt').innerHTML='<tr><th>Employee</th><th>Role</th><th>Location</th><th>Status</th><th>In</th><th>Out</th><th>Hours</th></tr>'+EMP.map(n=>{const rc=(AT[n]||{})[td],t=stt(n,td);return `<tr><td><b>${n}</b></td><td>${RL[n]}</td><td>${NM[n]}</td><td><span class='tag ${t.replace(/[ -]/g,'')}'>${t}</span></td><td>${rc?rc.i:'-'}</td><td>${rc&&rc.o?rc.o:'-'}</td><td>${rc&&rc.o?fh(hrs(rc)):'-'}</td></tr>`}).join('');
+$('#asx').style.display=ad?'':'none';$('#wdc').innerHTML=DN.map((d,i)=>`<label><input type='checkbox' ${AS.wd.includes(i)?'checked':''} onchange='sWD(${i},this.checked)'>${d}</label>`).join('');$('#ss').value=AS.st;$('#se').value=AS.en;$('#sg').value=AS.gr;
+AS.H.sort((x,y)=>x.d<y.d?-1:1);$('#hl').innerHTML=AS.H.map((h,i)=>`<div style='display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--bd)'><span>${h.d} · ${h.n}</span><button class='btn g' onclick='delH(${i})'>Remove</button></div>`).join('')}
+function sWD(i,c){AS.wd=c?[...new Set([...AS.wd,i])]:AS.wd.filter(x=>x!=i);sv();render()}function delH(i){AS.H.splice(i,1);sv();render()}window.sWD=sWD;window.delH=delH;
+$('#ss').onchange=()=>{AS.st=$('#ss').value||AS.st;sv();render()};$('#se').onchange=()=>{AS.en=$('#se').value||AS.en;sv();render()};$('#sg').onchange=()=>{AS.gr=+$('#sg').value||0;sv();render()};
+$('#hadd').onclick=()=>{const d=$('#hd').value,n=$('#hn').value.trim();if(!d||!n)return;AS.H.push({d,n});$('#hd').value=$('#hn').value='';sv();render()};
+$('#am').onchange=$('#ae').onchange=att;
+$('#ci').onclick=()=>{const r=AT[me[0]]=AT[me[0]]||{};if(r[TD()])return;r[TD()]={i:tm(new Date())};A.unshift({d:TD(),s:`${me[0]} clocked in at ${r[TD()].i}`});sv();render()};
+$('#co').onclick=()=>{const r=(AT[me[0]]||{})[TD()];if(!r||r.o)return;r.o=tm(new Date());A.unshift({d:TD(),s:`${me[0]} clocked out at ${r.o}`});sv();render()};
+setInterval(()=>{const c=$('#clk');if(c)c.textContent=new Date().toLocaleTimeString('en-IN')},1000);
+let atab='lk',SD='';
+function toast(m){const d=document.createElement('div');d.className='toast';d.textContent=m;document.body.appendChild(d);setTimeout(()=>{d.style.transition='.3s';d.style.opacity=0;setTimeout(()=>d.remove(),300)},2200)}
+function cu(){$$('.big').forEach(el=>{const m=el.textContent.trim().match(/^([\d.]+)(%?)$/);if(!m)return;const to=+m[1],sf=m[2],t0=performance.now(),f=n=>{const p=Math.min(1,(n-t0)/700);el.textContent=(to%1?(to*p).toFixed(1):Math.round(to*p))+sf;if(p<1)requestAnimationFrame(f)};requestAnimationFrame(f)})}
+function tdet(i){const t=T[i],o=document.createElement('div');o.className='ov';o.innerHTML=`<div class='md'><div style='display:flex;justify-content:space-between;gap:10px'><h3 style='margin:0'>${t.t}</h3><span class='tag ${t.p}'>${t.p} · ${W[t.p]}pt</span></div><div class='sub' style='margin:6px 0 18px'>${t.b} · ${t.l} · Due ${t.due}</div><div class='tl'>${t.path.map((p,j)=>`<div class='${j<t.i?'d':j==t.i?'c':''}'><b>Level ${j+1} · ${p}</b><div class='sub'>${NM[p]||''} · ${RL[p]||''} · ${j<t.i?'Completed':j==t.i?'Waiting on this level':'Queued'}</div></div>`).join('')}</div><div style='text-align:right'><button class='btn' id='mc'>Close</button></div></div>`;o.onclick=e=>{if(e.target==o||e.target.id=='mc')o.remove()};document.body.appendChild(o)}window.tdet=tdet;
+const _sh=show;show=function(v){_sh(v);cu()};
+const _a2=adv;adv=function(i){_a2(i);toast('Stage completed, points awarded')};window.adv=adv;const _rj=rej;rej=function(i){_rj(i);toast('Task sent back to the previous level')};window.rej=rej;
+$('#stats').onclick=()=>show('tasks');
+function ring(){if(!me)return;const rc=(AT[me[0]]||{})[TD()],sh=(mins(AS.en)-mins(AS.st))/60;let h=0;if(rc){const n=new Date();h=rc.o?hrs(rc):Math.max(0,(n.getHours()*60+n.getMinutes()-mins(rc.i))/60)}const c=$('#rgc'),t=$('#rgt');if(c)c.style.strokeDasharray=(Math.min(1,h/sh)*314)+' 314';if(t)t.textContent=fh(h)}
+function dday(en){const s=SD,d=$('#dd');if(!s){d.innerHTML='<div class=sub>Tap a day to see its details</div>';return}const rc=(AT[en]||{})[s],t=stt(en,s),h=isH(s),ot=rc&&rc.o&&isWD(s)?Math.max(0,hrs(rc)-(mins(AS.en)-mins(AS.st))/60):0,dt=new Date(s+'T00:00:00');d.style.animation='none';d.offsetHeight;d.style.animation='pop .3s both';d.innerHTML=`<div class='sub'>${s} · ${DN[dt.getDay()]}${h?' · '+h.n:''}</div><div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:6px'><b style='font-size:20px'>${t||'Upcoming'}</b><div style='display:flex;gap:22px'>${[['In',rc?rc.i:'-'],['Out',rc&&rc.o?rc.o:'-'],['Hours',rc&&rc.o?fh(hrs(rc)):'-'],['Overtime',ot?fh(ot):'-']].map(x=>`<div><div class='sub'>${x[0]}</div><b>${x[1]}</b></div>`).join('')}</div></div>`}
+function attX(){if(!me)return;const mg=['Developer','Company Owner','Finalizer','Auditor'].includes(me[1]),ad=['Developer','Company Owner'].includes(me[1]);if((atab=='tm'&&!mg)||(atab=='st'&&!ad))atab='lk';
+$$('#atabs span').forEach(s=>{const t=s.dataset.t;s.style.display=(t=='tm'&&!mg)||(t=='st'&&!ad)?'none':'';s.classList.toggle('on',t==atab)});
+Object.entries({lk:'ck',ak:'rc3',tm:'lb',st:'asx'}).forEach(([t,id])=>$('#'+id).style.display=t==atab?'':'none');
+$('#wk').innerHTML=[6,5,4,3,2,1,0].map(k=>{const d=new Date();d.setDate(d.getDate()-k);const s=ld(d),t=stt(me[0],s);return `<span class='wc s-${t.replace(/[ -]/g,'')}' title='${s}: ${t}' style='animation-delay:${(6-k)*60}ms'>${DN[d.getDay()][0]}</span>`}).join('');ring();
+const en=mg?$('#ae').value:me[0],mo=$('#am').value;if(mo){const y=+mo.slice(0,4),m=+mo.slice(5,7),first=new Date(y,m-1,1).getDay(),nd=new Date(y,m,0).getDate();if(!SD||SD.slice(0,7)!=mo)SD=TD().slice(0,7)==mo?TD():mo+'-01';
+let h=DN.map(d=>`<div class='ch'>${d}</div>`).join('')+"<div class='cd e'></div>".repeat(first);for(let q=1;q<=nd;q++){const s=mo+'-'+pad(q),t=stt(en,s),rc=(AT[en]||{})[s];h+=`<div class='cd ${t?'s-'+t.replace(/[ -]/g,''):''} ${s==TD()?'td':''} ${s==SD?'sel':''}' data-s='${s}' style='animation-delay:${q*10}ms'><b>${q}</b><span style='font-size:10px;color:var(--mut)'>${rc?rc.i:isH(s)?'Holiday':''}</span></div>`}
+$('#cal').innerHTML=h;$$('#cal .cd[data-s]').forEach(c=>c.onclick=()=>{SD=c.dataset.s;$$('#cal .cd').forEach(x=>x.classList.toggle('sel',x==c));dday(en)});dday(en)}
+$$('#lt tr').forEach((r,i)=>{if(i){r.style.cursor='pointer';r.onclick=()=>{$('#ae').value=EMP[i-1];atab='ak';SD='';render();cu()}}})}
+$$('#atabs span').forEach(s=>s.onclick=()=>{atab=s.dataset.t;attX();cu()});
+const shM=d=>{const v=$('#am').value||TD().slice(0,7),x=new Date(+v.slice(0,4),+v.slice(5,7)-1+d,1);$('#am').value=x.getFullYear()+'-'+pad(x.getMonth()+1);SD='';render()};$('#mp').onclick=()=>shM(-1);$('#mn').onclick=()=>shM(1);$('#am').onchange=$('#ae').onchange=()=>{SD='';render()};
+const _ci=$('#ci').onclick,_co=$('#co').onclick;$('#ci').onclick=()=>{_ci();toast('Clocked in at '+tm(new Date()))};$('#co').onclick=()=>{_co();toast('Clocked out at '+tm(new Date()))};
+setInterval(ring,30000);
+let uid='';
+const JD={},isAdm=()=>['Developer','Company Owner'].includes(me[1]),svU=()=>{try{localStorage.setItem('kjusers',JSON.stringify(U))}catch(e){}},roles=()=>[...new Set([...R.map(r=>r.n),...Object.values(U).map(u=>u[1])])],sel=(a,v)=>a.map(x=>`<option ${x==v?'selected':''}>${x}</option>`).join(''),esc=s=>String(s).replace(/'/g,'&#39;'),rnd=()=>Math.random().toString(36).slice(2,10);
+function rebuild(){EMP.length=0;[NM,RL,JD].forEach(o=>Object.keys(o).forEach(k=>delete o[k]));Object.values(U).forEach(u=>{EMP.push(u[0]);NM[u[0]]=u[2];RL[u[0]]=u[1];JD[u[0]]=u[7]||''});RS['Role wise']=[...new Set(Object.values(U).map(u=>u[1]))];$('#ae').innerHTML='';fs()}
+const DB={developer:'All',owner:'All',finalizer:'MIS',auditor:'Accounts & Finance',asha:'MIS',kiran:'Plant Coordination',suresh:'Plant Coordination'};let okU=0;
+try{const s=JSON.parse(localStorage.getItem('kjusers'));if(s&&Object.keys(s).length){Object.keys(U).forEach(k=>delete U[k]);Object.assign(U,s);okU=1}}catch(e){}
+if(!okU)Object.keys(U).forEach(k=>{U[k][3]='demo1234';U[k][4]=DB[k]||'All';U[k][5]='';U[k][6]='';U[k][7]=day(90)});
+rebuild();
+function hdr(){$('#wl').textContent='Welcome, '+me[0];$('#wr').textContent=me[1]+' · '+me[2];$('#av').textContent=me[0][0]}
+function navAcl(){if(me)$('#nusr').style.display=isAdm()?'':'none'}
+function nameTaken(n,k){return Object.entries(U).some(([x,u])=>u[0].toLowerCase()==n.toLowerCase()&&x!=k)}
+function renameEmp(o,n){if(o==n)return;L.forEach(x=>{if(x.n==o)x.n=n});T.forEach(t=>t.path=t.path.map(p=>p==o?n:p));if(AT[o]){AT[n]=AT[o];delete AT[o]}A.forEach(x=>x.s=x.s.split(o).join(n));sv()}
+function mdl(h){const o=document.createElement('div');o.className='ov';o.innerHTML=`<div class='md'>${h}</div>`;o.onclick=e=>{if(e.target==o||e.target.dataset.x)o.remove()};document.body.appendChild(o);return o}
+const q$=(o,s)=>o.querySelector(s),btns=(ok)=>`<div style='display:flex;gap:10px;justify-content:flex-end;margin-top:18px'><button class='btn g' data-x='1'>Cancel</button><button class='btn' id='mok'>${ok}</button></div>`,msg=(o,m)=>q$(o,'#mm').innerHTML=`<div class='er'>${m}</div>`;
+function usr(){if(!me||!$('#v-usr').classList.contains('on'))return;const q=$('#uq').value.toLowerCase(),cur=$('#ur').value||'All';$('#ur').innerHTML=sel(['All',...roles()],cur);const rf=$('#ur').value;$('#ut').innerHTML='<tr><th>User</th><th>Role</th><th>Branch</th><th>Location</th><th></th></tr>'+Object.entries(U).filter(([k,u])=>(!q||k.includes(q)||u[0].toLowerCase().includes(q))&&(rf=='All'||u[1]==rf)).map(([k,u])=>`<tr><td><div style='display:flex;gap:10px;align-items:center'>${avSpan(u)}<div><b>${u[0]}</b><div class='sub'>@${k}</div></div></div></td><td>${u[1]}</td><td>${u[4]||'-'}</td><td>${u[2]}</td><td style='white-space:nowrap'><button class='btn g' data-a='e' data-k='${k}'>Edit</button> <button class='btn g' data-a='p' data-k='${k}'>Reset password</button> <button class='btn r' data-a='d' data-k='${k}'>Delete</button></td></tr>`).join('')}
+$('#uq').oninput=usr;$('#ur').onchange=usr;$('#ut').onclick=e=>{const b=e.target.closest('[data-a]');if(b)({e:uEdit,p:uPw,d:uDel})[b.dataset.a](b.dataset.k)};
+function uEdit(k){const u=U[k],o=mdl(`<h3>Edit @${k}</h3><label>Full name</label><input id='a1' value='${esc(u[0])}'><label>Role</label><select id='a2'>${sel(roles(),u[1])}</select><label>Branch</label><select id='a3'>${sel(['All',...BR],u[4])}</select><label>Location</label><select id='a4'>${sel(['All',...LC],u[2])}</select><div id='mm'></div>${btns('Save')}`);q$(o,'#mok').onclick=()=>{const n=q$(o,'#a1').value.trim();if(!n)return msg(o,'Name is required.');if(nameTaken(n,k))return msg(o,'That name is already used.');renameEmp(u[0],n);u[0]=n;u[1]=q$(o,'#a2').value;u[4]=q$(o,'#a3').value;u[2]=q$(o,'#a4').value;svU();rebuild();o.remove();if(k==uid)hdr();render();toast('User updated')}}
+function uPw(k){const o=mdl(`<h3>Reset password for @${k}</h3><label>New password</label><input id='a1' value='${rnd()}'><div class='sub' style='margin-top:8px'>Share this with the user. They can change it from My profile.</div><div id='mm'></div>${btns('Reset')}`);q$(o,'#mok').onclick=()=>{const v=q$(o,'#a1').value;if(v.length<6)return msg(o,'Use at least 6 characters.');U[k][3]=v;svU();o.remove();toast('Password reset for '+U[k][0])}}
+function uDel(k){const u=U[k],open=T.filter(t=>t.i<t.path.length&&t.path[t.i]==u[0]).length,o=mdl(`<h3>Delete user</h3><p>Delete <b>${u[0]}</b> (@${k})? They will no longer be able to sign in.${open?` <b style='color:var(--red)'>${open} open task(s) are waiting on this user.</b>`:''} Past scores stay in the history.</p><div id='mm'></div>${btns('Delete')}`);q$(o,'#mok').className='btn r';q$(o,'#mok').onclick=()=>{if(k==uid)return msg(o,'You cannot delete the account you are signed in with.');if(u[1]=='Developer'&&Object.values(U).filter(x=>x[1]=='Developer').length<2)return msg(o,'At least one Developer account must remain.');delete U[k];svU();rebuild();o.remove();render();toast('User deleted')}}
+$('#uadd').onclick=()=>{const o=mdl(`<h3>Add user</h3><label>User ID</label><input id='a0' placeholder='letters, numbers, dot'><label>Full name</label><input id='a1'><label>Temporary password</label><input id='a5' value='${rnd()}'><label>Role</label><select id='a2'>${sel(roles(),'Process Coordinator')}</select><label>Branch</label><select id='a3'>${sel(BR,'MIS')}</select><label>Location</label><select id='a4'>${sel(LC,'Bengaluru Office')}</select><div id='mm'></div>${btns('Create user')}`);q$(o,'#mok').onclick=()=>{const k=q$(o,'#a0').value.trim().toLowerCase(),n=q$(o,'#a1').value.trim(),p=q$(o,'#a5').value;if(!/^[a-z0-9._]{3,20}$/.test(k))return msg(o,'User ID: 3 to 20 letters, numbers, dots or underscores.');if(U[k])return msg(o,'That user ID already exists.');if(!n||nameTaken(n,''))return msg(o,'Enter a unique full name.');if(p.length<6)return msg(o,'Password needs 6 or more characters.');U[k]=[n,q$(o,'#a2').value,q$(o,'#a4').value,p,q$(o,'#a3').value,'','',TD()];svU();rebuild();o.remove();render();toast('User @'+k+' created')}};
+function prof(){if(!me||!$('#v-prof').classList.contains('on'))return;const u=U[uid];$('#pav').textContent=u[0][0];$('#pnm').textContent=u[0];$('#prl').textContent=u[1]+' · '+u[2];$('#pid').value=uid;$('#pn').value=u[0];$('#pph').value=u[5]||'';$('#pds').value=u[6]||'';$('#pbr').value=u[4]||'All';$('#plo').value=u[2]}
+$('#psv').onclick=()=>{const u=U[uid],n=$('#pn').value.trim();if(!n||nameTaken(n,uid))return toast('Enter a unique name');renameEmp(u[0],n);u[0]=n;u[5]=$('#pph').value;u[6]=$('#pds').value;svU();rebuild();hdr();render();toast('Profile saved')};
+$('#ppw').onclick=()=>{const u=U[uid],pm=m=>$('#pmsg').innerHTML=`<div class='er'>${m}</div>`;if($('#pc0').value!==u[3])return pm('Current password is incorrect.');if($('#pc1').value.length<6)return pm('New password needs 6 or more characters.');if($('#pc1').value!==$('#pc2').value)return pm('New passwords do not match.');u[3]=$('#pc1').value;svU();$('#pmsg').innerHTML='';$('#pc0').value=$('#pc1').value=$('#pc2').value='';toast('Password updated')};
+$('#av').style.cursor='pointer';$('#av').onclick=()=>show('prof');
+const _en=enter;enter=function(k){uid=k;_en(k);navAcl()};
+const lerr=m=>$('#lerr').innerHTML=m?`<div class='er'>${m}</div>`:'';
+const DEMO=['developer','owner','finalizer','auditor','asha','kiran','suresh'].filter(k=>U[k]);$('#chips').innerHTML=DEMO.map(k=>`<span class='chip' data-k='${k}'>${U[k][1]}</span>`).join('');$('#chips').onclick=e=>{const k=e.target.dataset.k;if(k){$('#em').value=k;$('#pw').value='demo1234';lerr('')}};
+$('#eye').onclick=()=>{const p=$('#pw'),s=p.type=='password';p.type=s?'text':'password';$('#eye').textContent=s?'Hide':'Show'};
+$$('#lt2 span').forEach(s=>s.onclick=()=>{const up=s.dataset.t=='up';$$('#lt2 span').forEach(x=>x.classList.toggle('on',x==s));$('#fs').style.display=up?'none':'';$('#fr').style.display=up?'':'none';lerr('');$('#bye').style.display='none'});
+$('#gb').innerHTML=sel(BR,'MIS');$('#gl').innerHTML=sel(LC,'Bengaluru Office');
+$('#go').onclick=()=>{const k=$('#em').value.trim().toLowerCase(),u=U[k];if(!u||u[3]!==$('#pw').value){lerr('Incorrect user ID or password.');$('.lc').animate([{transform:'translateX(-8px)'},{transform:'translateX(8px)'},{transform:'none'}],{duration:250});return}lerr('');$('#bye').style.display='none';$('#go').textContent='Signing in...';setTimeout(()=>{$('#go').textContent='Sign in';enter(k);try{localStorage.setItem('kj',k)}catch(e){}},500)};
+$('#gbtn').onclick=()=>{const k=$('#gu').value.trim().toLowerCase(),n=$('#gn').value.trim(),p=$('#gp').value,l=$('#gl').value;if(!n)return lerr('Enter your full name.');if(!/^[a-z0-9._]{3,20}$/.test(k))return lerr('User ID: 3 to 20 letters, numbers, dots or underscores.');if(U[k])return lerr('That user ID is already taken.');if(nameTaken(n,''))return lerr('That name is already registered.');if(p.length<6)return lerr('Password needs 6 or more characters.');if(p!==$('#gq').value)return lerr('Passwords do not match.');U[k]=[n,l=='Bengaluru Office'?'Process Coordinator':'Plant Staff',l,p,$('#gb').value,'','',TD()];svU();rebuild();lerr('');try{localStorage.setItem('kj',k)}catch(e){}enter(k);toast('Welcome to KEJMIN OPS, '+n)};
+$('#login').onkeydown=e=>{if(e.key=='Enter')($('#fs').style.display=='none'?$('#gbtn'):$('#go')).click()};
+const _o=$('#out').onclick;$('#out').onclick=()=>{_o();$('#pw').value='';lerr('')};
+try{const k=localStorage.getItem('kj');if(k&&U[k])enter(k)}catch(e){}
+const _o2=$('#out').onclick;$('#out').onclick=()=>{_o2();const k=$('#kl');k.innerHTML=k.innerHTML};
+$('#kl').onclick=()=>{const k=$('#kl');k.innerHTML=k.innerHTML};
+let ptab='d';
+function profX(){if(!me||!$('#v-prof').classList.contains('on'))return;const u=U[uid],ev=L.filter(x=>x.n==u[0]),st=stats(u[0],TD().slice(0,7)+'-01',TD());
+$('#pnm').textContent=u[0];$('#prl').textContent=`${u[1]} · ${u[2]}${u[4]&&u[4]!='All'?' · '+u[4]:''}${u[6]?' · '+u[6]:''}`;
+$('#pst').innerHTML=[['Stages completed',ev.length],['Total points',r1(ev.reduce((s,x)=>s+x.pts,0))],['Attendance this month',st.pct+'%'],['Member since',u[7]||'-']].map((s,i)=>`<div class='glass card' style='animation-delay:${i*.07}s'><div class='sub'>${s[0]}</div><div class='big' style='${i==3?'font-size:20px;padding-top:6px':''}'>${s[1]}</div></div>`).join('');
+$$('#ptabs span').forEach(s=>s.classList.toggle('on',s.dataset.t==ptab));['d','s','a'].forEach(t=>$('#pt-'+t).style.display=t==ptab?'':'none');
+const it=[...A.filter(x=>x.s.includes(u[0])).map(x=>[x.d,x.s]),...ev.map(x=>[x.d,`Earned ${x.pts} points`])].sort((a,b)=>a[0]<b[0]?1:-1).slice(0,8);
+$('#pact').innerHTML=it.length?`<div class='tl'>${it.map(x=>`<div class='d'><b>${x[1]}</b><div class='sub'>${x[0]}</div></div>`).join('')}</div>`:'<div class=sub>No activity yet.</div>'}
+const _pf=prof;prof=function(){_pf();profX()};
+$$('#ptabs span').forEach(s=>s.onclick=()=>{ptab=s.dataset.t;profX()});
+const sb=document.createElement('div');sb.className='bar';sb.style.marginTop='8px';sb.innerHTML=`<i style='width:0'></i>`;$('#pc1').after(sb);
+$('#pc1').oninput=()=>{const p=$('#pc1').value,n=(p.length>=6)+(p.length>=10)+(/[a-z]/.test(p)&&/[A-Z]/.test(p))+(/\d/.test(p)&&/[^\w]/.test(p)),i=sb.firstChild;i.style.animation='none';i.style.width=n*25+'%';i.style.background=n<2?'var(--red)':n<3?'var(--org)':'var(--blue)'};
+
+/* ===== LOG (developer only) ===== */
+const LGC=['Sign-in','Task','User','Delete','Attendance','Role','Security','Export','Upload'],LGT={Delete:'High',Security:'High',Upload:'Medium',Role:'Medium',User:'Medium',Export:'Medium'};
+let LG=[],LN=200;try{const x=JSON.parse(localStorage.getItem('kjlog'));if(Array.isArray(x))LG=x}catch(e){}
+const inApp=()=>$('#app').style.display==='block'&&me,isDev=()=>!!me&&me[1]==='Developer';
+const lgE=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtT=ts=>{const d=new Date(ts);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())};
+function lgLoad(){try{const x=JSON.parse(localStorage.getItem('kjlog'));if(Array.isArray(x))LG=x}catch(e){}}
+function logEv(c,txt,a,i){lgLoad();LG.push({ts:Date.now(),u:a!=null?a:(inApp()?me[0]:'-'),i:i!=null?i:(inApp()?uid:''),c:c,s:txt});if(LG.length>4000)LG.splice(0,LG.length-4000);try{localStorage.setItem('kjlog',JSON.stringify(LG))}catch(e){}if(me&&$('#v-log').classList.contains('on'))logUI()}
+window.logEv=logEv;
+function lgFiltered(){const f1=$('#lgf1').value,f2=$('#lgf2').value,u=$('#lgfu').value,c=$('#lgfc').value,q=$('#lgfq').value.trim().toLowerCase(),a=f1?new Date(f1+'T00:00:00').getTime():0,b=f2?new Date(f2+'T23:59:59.999').getTime():Infinity;
+return LG.filter(e=>e.ts>=a&&e.ts<=b&&(u=='All'||e.u==u)&&(c=='All'||e.c==c)&&(!q||(e.u+' '+e.i+' '+e.c+' '+e.s).toLowerCase().includes(q))).sort((x,y)=>y.ts-x.ts)}
+function logUI(){if(!me||!$('#v-log').classList.contains('on'))return;
+if(!isDev()){$('#lgt').innerHTML='';$('#lgk').textContent='';$('#lgp').textContent='';$('#lgs').textContent='';$('#lgp2').textContent='';return}
+lgLoad();const cu_=$('#lgfu').value||'All',cc=$('#lgfc').value||'All',who=(me[0].toLowerCase().replace(/[^a-z0-9]+/g,'.')+'@'+uid);
+$('#lgfu').innerHTML=['All',...new Set(LG.map(e=>e.u))].map(x=>`<option ${x==cu_?'selected':''}>${lgE(x)}</option>`).join('');
+$('#lgfc').innerHTML=['All',...LGC].map(x=>`<option ${x==cc?'selected':''}>${x}</option>`).join('');
+const r=lgFiltered(),t0=new Date(new Date().setHours(0,0,0,0)),shown=r.slice(0,LN);
+$('#lgk').textContent=r.length+' line'+(r.length==1?'':'s');
+$('#lgp').innerHTML=`<span>${lgE(who)}</span>:<i>~</i>$ sort -r activity.log | head -n ${Math.min(LN,r.length)}`;
+$('#lgs').textContent=`# ${r.length} event${r.length==1?'':'s'} · ${new Set(r.map(e=>e.u)).size} user${new Set(r.map(e=>e.u)).size==1?'':'s'} · ${r.filter(e=>e.ts>=t0.getTime()).length} today · ${r.filter(e=>e.c=='Delete').length} deleted · newest first`;
+$('#lgt').innerHTML=shown.map(e=>`<div class="ln"><span class="tm">${fmtT(e.ts)}</span><span class="us">${lgE(e.u)}${e.i?' <span class="tm">@'+lgE(e.i)+'</span>':''}</span><span class="ty c-${lgE(e.c)}">${lgE(e.c.toUpperCase())}</span><span class="tx">${lgE(e.s)}</span></div>`).join('')||'<div class="sm">No events match these filters. Actions people take from now on will appear here.</div>';
+$('#lgmore').style.display=r.length>LN?'':'none';$('#lgmore').textContent='load more ('+(r.length-LN)+' lines left)';
+$('#lgp2').innerHTML=`<span>${lgE(who)}</span>:<i>~</i>$ <span class="cur"></span>`}
+['lgf1','lgf2','lgfu','lgfc'].forEach(id=>$('#'+id).onchange=()=>{LN=200;logUI()});$('#lgfq').oninput=()=>{LN=200;logUI()};
+$('#lgmore').onclick=()=>{LN+=200;logUI()};
+$('#lgf1').value=day(30);$('#lgf2').value=day(0);
+$('#lgex').onclick=()=>{const q=v=>'"'+String(v).replace(/"/g,'""')+'"',t=$('#lgcsv');t.value=['Time,User,User ID,Type,What happened',...lgFiltered().map(e=>[fmtT(e.ts),e.u,e.i,e.c,e.s].map(q).join(','))].join('\n');t.style.display='block';t.select();try{document.execCommand('copy')}catch(e){}};
+
+/* hooks: tasks */
+{const _ct=$('#ct').onclick;$('#ct').onclick=()=>{const n=T.length;_ct();if(T.length>n){const t=T[0];logEv('Task',`created task "${t.t}" · ${t.b} · ${t.l} · ${t.p} importance · due ${t.due} · path: ${t.path.join(' › ')}`)}}}
+{const _a=adv;adv=function(i){const t=T[i],st=t.i,who=t.path[st],n=L.length;_a(i);const pts=L.length>n?L[L.length-1].pts:0;logEv('Task',`completed stage ${st+1} of ${t.path.length} on "${t.t}"${who&&who!==me[0]?` on behalf of ${who}`:''} · +${pts} pts${t.i>=t.path.length?' · task fully completed':''}`)};window.adv=adv}
+{const _r=rej;rej=function(i){const t=T[i],from=t.path[t.i];_r(i);logEv('Task',`sent back "${t.t}" from ${from} to ${t.path[t.i]}`)};window.rej=rej}
+/* hooks: attendance clock */
+{const _ci=$('#ci').onclick;$('#ci').onclick=()=>{const had=(AT[me[0]]||{})[TD()];_ci();const r=(AT[me[0]]||{})[TD()];if(!had&&r)logEv('Attendance',`clocked in at ${r.i}`)}}
+{const _co=$('#co').onclick;$('#co').onclick=()=>{const r=(AT[me[0]]||{})[TD()],had=r&&r.o;_co();if(r&&r.o&&!had)logEv('Attendance',`clocked out at ${r.o} · ${fh(hrs(r))} worked`)}}
+/* hooks: roles, exports */
+{const _rc=$('#rcb').onclick;$('#rcb').onclick=()=>{const n=R.length;_rc();if(R.length>n){const r=R[R.length-1];logEv('Role',`created role "${r.n}" · ${scTxt(r)} · permissions: ${r.p.map(i=>PERM[i]).join(', ')||'none'}`)}}}
+{const _ex=$('#ex').onclick;$('#ex').onclick=()=>{_ex();logEv('Export',`exported report CSV · ${$('#r1').value} to ${$('#r2').value} · branch ${$('#rb').value} · location ${$('#rl').value} · ${$('#rv').value}`)}}
+{const _pr=window.print;window.print=function(){logEv('Export','printed a report');return _pr.apply(window,arguments)}}
+/* hooks: sign-in / sign-out */
+{const _go=$('#go').onclick;$('#go').onclick=()=>{const k=$('#em').value.trim().toLowerCase(),pw=$('#pw').value,ok=U[k]&&U[k][3]===pw;_go();if(ok)logEv('Sign-in','signed in',U[k][0],k);else logEv('Security',`failed sign-in attempt with user ID "${k}"`,'(not signed in)',k)}}
+{const _out=$('#out').onclick;$('#out').onclick=()=>{if(inApp())logEv('Sign-in','signed out');_out()}}
+/* hooks: users and attendance settings are caught when they are saved */
+const snapU=()=>JSON.parse(JSON.stringify(U));let PU=snapU();
+function diffU(){const here=!!inApp();
+Object.keys(U).forEach(k=>{const n=U[k],o=PU[k];
+if(!o){logEv('User',here?`created user @${k} · ${n[0]} · ${n[1]} · ${n[4]} · ${n[2]}`:`registered a new account @${k} · ${n[1]} · ${n[4]} · ${n[2]}`,here?null:n[0],here?null:k);return}
+const ch=[];if(o[0]!==n[0])ch.push(`name "${o[0]}" to "${n[0]}"`);if(o[1]!==n[1])ch.push(`role ${o[1]} to ${n[1]}`);if(o[4]!==n[4])ch.push(`branch ${o[4]||'-'} to ${n[4]||'-'}`);if(o[2]!==n[2])ch.push(`location ${o[2]} to ${n[2]}`);if((o[5]||'')!==(n[5]||''))ch.push('phone');if((o[6]||'')!==(n[6]||''))ch.push('designation');if((o[8]||'')!==(n[8]||''))ch.push(n[8]?'profile picture changed':'profile picture removed');
+if(ch.length)logEv('User',`updated @${k}: ${ch.join('; ')}`);
+if(o[3]!==n[3])logEv('Security',here&&uid===k?'changed own password':`reset password for @${k} (${n[0]})`)});
+Object.keys(PU).forEach(k=>{if(!U[k])logEv('Delete',`deleted user @${k} · ${PU[k][0]} · ${PU[k][1]} · ${PU[k][2]}`)});
+PU=snapU()}
+let PS=JSON.stringify(AS);
+function diffAS(){const o=JSON.parse(PS),n=AS,sw=a=>[...a].sort().join();
+if(sw(o.wd)!==sw(n.wd))logEv('Attendance','changed working days to '+[...n.wd].sort().map(d=>DN[d]).join(', '));
+if(o.st!==n.st||o.en!==n.en)logEv('Attendance',`changed shift from ${o.st}-${o.en} to ${n.st}-${n.en}`);
+if(o.gr!==n.gr)logEv('Attendance',`changed grace period from ${o.gr} to ${n.gr} minutes`);
+const hk=h=>h.d+'|'+h.n,oh=o.H.map(hk),nh=n.H.map(hk);
+n.H.filter(h=>!oh.includes(hk(h))).forEach(h=>logEv('Attendance',`added holiday ${h.d} · ${h.n}`));
+o.H.filter(h=>!nh.includes(hk(h))).forEach(h=>logEv('Delete',`removed holiday ${h.d} · ${h.n}`));
+PS=JSON.stringify(n)}
+{const _si=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){_si.call(this,k,v);try{if(this===localStorage){if(k==='kjusers')diffU();else if(k==='kjat')diffAS()}}catch(e){}}}
+/* access: Developer only */
+{const _s=show;show=function(v){_s(isDev()||v!=='log'?v:'dash')}}
+{const _rl=render;render=function(){_rl();if(!me)return;$('#nlog').style.display=isDev()?'':'none';logUI()}}
+
+/* ===== redesign: strata art + dashboard greeting ===== */
+const STRATA='<svg viewBox="0 0 800 400" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg"><path class="b" style="--i:0" d="M0 170C130 140 270 205 410 172S680 138 800 168V400H0Z" fill="#2a5fb0"/><path class="b" style="--i:1" d="M0 225C140 195 290 255 430 224S690 192 800 222V400H0Z" fill="#21539d"/><path class="b" style="--i:2" d="M0 275C150 250 300 305 450 277S700 248 800 274V400H0Z" fill="#1a4688"/><path class="b" style="--i:3" d="M0 325C160 305 310 350 460 328S710 305 800 326V400H0Z" fill="#143a74"/><path class="vein" d="M-10 238C130 208 280 268 430 236S690 204 810 232" fill="none" stroke="#ffa94d" stroke-width="3" stroke-linecap="round"/><path class="vein v2" d="M-10 252C140 224 290 282 440 250S700 220 810 246" fill="none" stroke="#ffa94d" stroke-opacity=".5" stroke-width="1.5" stroke-linecap="round"/></svg>';
+$$('.art').forEach(e=>e.innerHTML=STRATA);
+{const _rh=render;render=function(){_rh();if(!me)return;const h=new Date().getHours(),m=mine(),open=m.filter(t=>t.i<t.path.length),od=open.filter(t=>t.due<day(0)).length,mt=open.filter(t=>t.path[t.i]===me[0]).length,pl=n=>n+' task'+(n>1?'s':'');
+$('#dht').textContent=(h<12?'Good morning':h<17?'Good afternoon':'Good evening')+', '+me[0].split(' ')[0];
+$('#dhs').textContent=mt?`${mt>1?mt+' tasks are':'1 task is'} waiting on you${od?`, ${od} overdue on your list`:''}.`:open.length?`${pl(open.length)} in progress${od?`, ${od} overdue`:''}. Nothing is waiting on you.`:'Every task is signed off.';
+$('#dhd').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}}
+
+
+/* ===== tasks page redesign ===== */
+const TS={f:'all',q:'',b:'All',l:'All',p:'All',s:'due',v:'list'};
+try{const v=localStorage.getItem('kjtv');if(v==='list'||v==='board')TS.v=v}catch(e){}
+$('#tkb').innerHTML=opt(BR);$('#tkl').innerHTML=opt(LC);$('#tkp').innerHTML=opt(['Low','Medium','High']);
+const tkOpen=t=>t.i<t.path.length,tkOver=t=>tkOpen(t)&&t.due<day(0),tkMine=t=>tkOpen(t)&&t.path[t.i]===me[0],tkIni=n=>n.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase();
+function tkDue(t){if(!tkOpen(t))return '<span class="tk-due ok">Completed</span>';const d=Math.round((new Date(t.due+'T00:00:00Z')-new Date(day(0)+'T00:00:00Z'))/864e5);return d<0?`<span class="tk-due late">Overdue by ${-d} day${d==-1?'':'s'}</span>`:d==0?'<span class="tk-due warn">Due today</span>':`<span class="tk-due">Due in ${d} day${d==1?'':'s'}</span>`}
+const tkStep=t=>`<div class="tk-st">${t.path.map((p,j)=>`<div class="tk-s ${j<t.i?'d':j==t.i?'c':''}" title="${lgE(p)}"><span class="tk-dot">${j<t.i?'&#10003;':lgE(tkIni(p))}</span><span class="tk-nm">${lgE(p)}</span></div>`).join('')}</div>`;
+function tkAct(i){const t=T[i];if(!tkOpen(t))return '';return (t.path[t.i]===me[0]||all()?`<button class="btn" onclick="adv(${i})">Mark done</button>`:'')+rejBtn(i)}
+function tkCard(t,i,board){const o=tkOpen(t),pct=Math.round(Math.min(t.i,t.path.length)/t.path.length*100),wait=o?`Stage ${t.i+1} of ${t.path.length} &middot; waiting on <b>${lgE(t.path[t.i])}</b>`:`All ${t.path.length} stages signed off`;
+return `<article class="glass tk-card p-${t.p}${tkOver(t)?' late':''}${tkMine(t)?' mine':''}"><div><div><button class="tk-title" onclick="tdet(${i})">${lgE(t.t)}</button>${tkMine(t)?'<span class="tk-me">Your turn</span>':''}</div><div class="tk-meta"><span>${lgE(t.b)}</span><span>&middot;</span><span>${lgE(t.l)}</span><span class="tag ${t.p}">${t.p} &middot; ${W[t.p]}pt</span></div></div>${board?`<div><div class="bar"><i style="width:${pct}%"></i></div><div class="tk-wait" style="margin-top:6px">${wait}</div></div>`:tkStep(t)}<div class="tk-side">${tkDue(t)}${board?'':`<div class="tk-wait">${wait}</div>`}<div class="tk-act">${tkAct(i)}</div></div></article>`}
+function tkRender(){if(!me)return;const m=mine(),idx=t=>T.indexOf(t),cnt={all:m.length,mine:m.filter(tkMine).length,prog:m.filter(tkOpen).length,over:m.filter(tkOver).length,done:m.filter(t=>!tkOpen(t)).length};
+$('#tk-tabs').innerHTML=[['all','All tasks',''],['mine','Waiting on you','o'],['prog','In progress',''],['over','Overdue','r'],['done','Completed','']].map(x=>`<button type="button" class="tk-tab ${x[2]} ${TS.f==x[0]?'on':''}" data-f="${x[0]}"><b>${cnt[x[0]]}</b><span>${x[1]}</span></button>`).join('');
+const q=TS.q.trim().toLowerCase(),fl={all:()=>true,mine:tkMine,prog:tkOpen,over:tkOver,done:t=>!tkOpen(t)}[TS.f];
+const r=m.filter(t=>fl(t)&&(TS.b=='All'||t.b==TS.b)&&(TS.l=='All'||t.l==TS.l)&&(TS.p=='All'||t.p==TS.p)&&(!q||(t.t+' '+t.path.join(' ')+' '+t.b+' '+t.l).toLowerCase().includes(q)));
+const dc=(a,b)=>a.due<b.due?-1:a.due>b.due?1:0;r.sort({due:(a,b)=>(tkOpen(b)-tkOpen(a))||dc(a,b),imp:(a,b)=>(W[b.p]-W[a.p])||dc(a,b),new:(a,b)=>idx(a)-idx(b)}[TS.s]);
+$('#tk-sub').textContent=`${r.length} of ${m.length} task${m.length==1?'':'s'} shown`+(all()?' · all branches':' · tasks you are on the path for');
+let h;if(!r.length)h=`<div class="glass tk-empty"><b>${m.length?'No tasks match these filters.':'No tasks yet.'}</b><div class="sub" style="margin-top:6px">${m.length?'Clear the search or choose another tab.':'Create one from the Workflow builder.'}</div></div>`;
+else if(TS.v=='board'){const cols=[['Not started',r.filter(t=>t.i==0)],['In progress',r.filter(t=>t.i>0&&tkOpen(t))],['Completed',r.filter(t=>!tkOpen(t))]];h=`<div class="tk-board">${cols.map(c=>`<div class="tk-col"><h4>${c[0]}<span class="tag Low">${c[1].length}</span></h4>${c[1].map(t=>tkCard(t,idx(t),1)).join('')||'<div class="tk-empty" style="padding:18px">Nothing here</div>'}</div>`).join('')}</div>`}
+else h=`<div class="tk-list">${r.map(t=>tkCard(t,idx(t),0)).join('')}</div>`;
+$('#tk-body').innerHTML=h;$$('.tk-vt button').forEach(b=>b.classList.toggle('on',b.dataset.v==TS.v))}
+$('#tk-tabs').onclick=e=>{const b=e.target.closest('[data-f]');if(b){TS.f=b.dataset.f;tkRender()}};
+$('#tks').oninput=()=>{TS.q=$('#tks').value;tkRender()};
+[['tkb','b'],['tkl','l'],['tkp','p'],['tkso','s']].forEach(([id,k])=>$('#'+id).onchange=()=>{TS[k]=$('#'+id).value;tkRender()});
+$$('.tk-vt button').forEach(b=>b.onclick=()=>{TS.v=b.dataset.v;try{localStorage.setItem('kjtv',TS.v)}catch(e){}tkRender()});
+$('#tk-new').onclick=()=>show('flow');
+{const _tk=render;render=function(){_tk();tkRender()}}
+
+
+/* ===== profile picture ===== */
+const phStyle=u=>u&&u[8]?`background-image:url("${u[8]}")`:'';
+function avSpan(u){return `<span class="av${u[8]?' ph':''}" style="width:34px;height:34px;flex:none;font-size:14px;${phStyle(u)}">${lgE(u[0][0])}</span>`}
+function setAv(el,u){if(!el||!u)return;el.style.backgroundImage=u[8]?`url("${u[8]}")`:'';el.classList.toggle('ph',!!u[8]);el.textContent=u[0][0]}
+function avatars(){if(!me||!U[uid])return;const u=U[uid];setAv($('#av'),u);setAv($('#pav'),u);const lg=$('#sidenav .lg');lg.style.backgroundImage=u[8]?`url("${u[8]}")`:'';lg.style.backgroundSize='cover';lg.style.backgroundPosition='center';lg.classList.toggle('ph',!!u[8]);$('#pphr').disabled=!u[8]}
+$('#pphb').onclick=()=>$('#pphf').click();
+$('#pphf').onchange=()=>{const f=$('#pphf').files[0];$('#pphf').value='';if(!f)return;if(!/^image\//.test(f.type))return toast('Please choose an image file');if(f.size>5*1048576)return toast('That image is larger than 5 MB');
+const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const S=256,c=document.createElement('canvas');c.width=c.height=S;const g=c.getContext('2d'),m=Math.min(im.width,im.height);g.fillStyle='#fff';g.fillRect(0,0,S,S);g.drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,S,S);U[uid][8]=c.toDataURL('image/jpeg',.85);svU();render();toast('Profile picture updated')};im.onerror=()=>toast('That image could not be read');im.src=r.result};r.onerror=()=>toast('That image could not be read');r.readAsDataURL(f)};
+$('#pphr').onclick=()=>{if(!U[uid][8])return;U[uid][8]='';svU();render();toast('Profile picture removed')};
+{const _pa=render;render=function(){_pa();avatars()}}
+
+
+/* ===== retractable menu ===== */
+{const bd=document.body,sn=$('#sidenav'),bt=$('#sbt');let hov=false,foc=false;
+try{if(localStorage.getItem('kjsb')==='1')bd.classList.add('sb-c')}catch(e){}
+const sync=()=>{const c=bd.classList.contains('sb-c');sn.classList.toggle('cl',c&&!hov&&!foc);bt.setAttribute('aria-pressed',c);const t=c?'Keep menu open':'Retract menu';bt.setAttribute('aria-label',t);bt.title=t};
+let lt;sn.addEventListener('mouseenter',()=>{clearTimeout(lt);hov=true;sync()});sn.addEventListener('mouseleave',()=>{clearTimeout(lt);lt=setTimeout(()=>{hov=false;sync()},150)});
+sn.addEventListener('focusin',()=>{foc=true;sync()});sn.addEventListener('focusout',e=>{if(!sn.contains(e.relatedTarget)){foc=false;sync()}});
+bt.onclick=()=>{const c=bd.classList.toggle('sb-c');try{localStorage.setItem('kjsb',c?'1':'0')}catch(e){}clearTimeout(lt);hov=false;foc=false;bt.blur();sync()};
+sync()}
+
+/* ===== responsive menu drawer ===== */
+{const sn=$('#sidenav'),sc=$('#scrim'),mb=$('#mnu'),set=o=>{sn.classList.toggle('open',o);sc.classList.toggle('on',o);mb.setAttribute('aria-expanded',o);mb.setAttribute('aria-label',o?'Close menu':'Open menu')};
+mb.onclick=()=>set(!sn.classList.contains('open'));sc.onclick=()=>set(false);
+sn.addEventListener('click',e=>{if(e.target.closest('.nav,#out'))set(false)});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')set(false)});
+window.addEventListener('resize',()=>{if(innerWidth>980)set(false)})}
+/* redraw once everything is wired, so an automatic sign-in after reload shows the full UI */
+if(me)render();
+</script></body></html>

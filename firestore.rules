@@ -1,0 +1,766 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ===== Hardened Global Primitives =====
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdminEmail() {
+      return isVerified() && request.auth.token.email == 'krushna.hka2@gmail.com';
+    }
+
+    function isAdmin() {
+      return isAdminEmail() || (
+        isVerified() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isDeveloper() {
+      return isAdminEmail() || (
+        isVerified() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'Developer'
+      );
+    }
+
+    function roleRank(r) {
+      return r == 'Developer' ? 100 :
+        r == 'Company Owner' ? 80 :
+        r == 'Finalizer' ? 60 :
+        r == 'Auditor' ? 50 :
+        r == 'Process Coordinator' ? 30 :
+        r == 'Plant Staff' ? 10 :
+        (r is string && r.size() > 0 ? 20 : 0);
+    }
+
+    function actorRole() {
+      return isDeveloper() ? 'Developer' : (
+        isVerified() && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+          ? get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role
+          : ''
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidDate(d) {
+      return d is string && d.size() == 10 && d.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function isValidOptionalTime(t) {
+      return t is string && t.size() <= 5 && t.matches('^([0-9]{2}:[0-9]{2})?$');
+    }
+
+    function isValidTime(t) {
+      return t is string && t.size() == 5 && t.matches('^[0-9]{2}:[0-9]{2}$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // ===== Validation Blueprints (Anti-Update-Gap) =====
+    function isValidAdminRecord(data) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'role', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 200 &&
+        data.role in ['Developer', 'Company Owner'] &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidDirectoryEntry(data) {
+      return data.keys().hasAll([
+          'empId', 'docId', 'name', 'role', 'branch', 'location',
+          'designation', 'joinedAt', 'photoUrl', 'active', 'authUid',
+          'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'empId', 'docId', 'name', 'role', 'branch', 'location',
+          'designation', 'joinedAt', 'photoUrl', 'active', 'authUid',
+          'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.empId is string && data.empId.size() >= 3 && data.empId.size() <= 32 && data.empId.matches('^[a-z0-9._]{3,20}$') &&
+        isValidId(data.docId) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        data.role is string && data.role.size() >= 1 && data.role.size() <= 60 &&
+        data.branch is string && data.branch.size() >= 1 && data.branch.size() <= 60 &&
+        data.location is string && data.location.size() >= 1 && data.location.size() <= 60 &&
+        data.designation is string && data.designation.size() <= 100 &&
+        isValidDate(data.joinedAt) &&
+        data.photoUrl is string && data.photoUrl.size() <= 300000 &&
+        data.active is bool &&
+        data.authUid is string && data.authUid.size() <= 128 &&
+        data.orgId == 'kejmin' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivate(data) {
+      return data.keys().hasAll([
+          'empId', 'docId', 'authUid', 'email', 'phone',
+          'passwordHash', 'passwordSalt', 'twoStepEnabled',
+          'active', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'empId', 'docId', 'authUid', 'email', 'phone',
+          'passwordHash', 'passwordSalt', 'twoStepEnabled',
+          'active', 'createdAt', 'updatedAt'
+        ]) &&
+        data.empId is string && data.empId.size() >= 3 && data.empId.size() <= 32 && data.empId.matches('^[a-z0-9._]{3,20}$') &&
+        isValidId(data.docId) &&
+        data.authUid is string && data.authUid.size() <= 128 &&
+        data.email is string && data.email.size() <= 200 &&
+        data.phone is string && data.phone.size() <= 30 &&
+        data.passwordHash is string && data.passwordHash.size() >= 16 && data.passwordHash.size() <= 128 &&
+        data.passwordSalt is string && data.passwordSalt.size() >= 8 && data.passwordSalt.size() <= 64 &&
+        data.twoStepEnabled is bool &&
+        data.active is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidRole(data) {
+      return data.keys().hasAll([
+          'roleId', 'name', 'branchScope', 'locationScope',
+          'permissions', 'builtin', 'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'roleId', 'name', 'branchScope', 'locationScope',
+          'permissions', 'builtin', 'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.roleId) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 60 &&
+        data.branchScope is string && data.branchScope.size() >= 1 && data.branchScope.size() <= 80 &&
+        data.locationScope is string && data.locationScope.size() >= 1 && data.locationScope.size() <= 80 &&
+        data.permissions is list && data.permissions.size() <= 9 &&
+        (data.permissions.size() == 0 || data.permissions[0] is int) &&
+        data.builtin is bool &&
+        data.orgId == 'kejmin' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidOrgUnit(data) {
+      return data.keys().hasAll(['id', 'name', 'code', 'active', 'orgId', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'name', 'code', 'active', 'orgId', 'createdAt']) &&
+        isValidId(data.id) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 60 &&
+        data.code is string && data.code.size() >= 1 && data.code.size() <= 20 &&
+        data.active is bool &&
+        data.orgId == 'kejmin' &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidPath(data) {
+      return data.keys().hasAll(['pathId', 'name', 'stages', 'orgId', 'createdBy', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['pathId', 'name', 'stages', 'orgId', 'createdBy', 'createdAt', 'updatedAt']) &&
+        isValidId(data.pathId) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        data.stages is list && data.stages.size() <= 12 &&
+        (data.stages.size() == 0 || data.stages[0] is string) &&
+        data.orgId == 'kejmin' &&
+        data.createdBy is string && data.createdBy.size() <= 100 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidTask(data) {
+      return data.keys().hasAll([
+          'taskId', 'title', 'branch', 'location', 'priority',
+          'pathId', 'path', 'stage', 'dueAt', 'status', 'proofs',
+          'lastSendBackReason', 'createdBy', 'createdByUid',
+          'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'taskId', 'title', 'branch', 'location', 'priority',
+          'pathId', 'path', 'stage', 'dueAt', 'dueTime', 'repeatMode', 'repeatSeriesId',
+          'status', 'proofs', 'lastSendBackReason', 'createdBy', 'createdByUid',
+          'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.taskId) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.branch is string && data.branch.size() >= 1 && data.branch.size() <= 60 &&
+        data.location is string && data.location.size() >= 1 && data.location.size() <= 60 &&
+        data.priority in ['Low', 'Medium', 'High'] &&
+        data.pathId is string && data.pathId.size() <= 64 &&
+        data.path is list && data.path.size() >= 1 && data.path.size() <= 12 && data.path[0] is string &&
+        data.stage is int && data.stage >= 0 && data.stage <= data.path.size() &&
+        isValidDate(data.dueAt) &&
+        (!('dueTime' in data) || isValidOptionalTime(data.dueTime)) &&
+        (!('repeatMode' in data) || data.repeatMode in ['none', 'daily']) &&
+        (!('repeatSeriesId' in data) || (data.repeatSeriesId is string && data.repeatSeriesId.size() <= 64)) &&
+        data.status in ['open', 'closed'] &&
+        data.proofs is list && data.proofs.size() <= 10 &&
+        (data.proofs.size() == 0 || data.proofs[0] is string) &&
+        data.lastSendBackReason is string && data.lastSendBackReason.size() <= 500 &&
+        data.createdBy is string && data.createdBy.size() >= 1 && data.createdBy.size() <= 100 &&
+        data.createdByUid is string && data.createdByUid.size() >= 1 && data.createdByUid.size() <= 128 &&
+        data.orgId == 'kejmin' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidScoreEvent(data) {
+      return data.keys().hasAll([
+          'eventId', 'uid', 'employeeName', 'taskId', 'points',
+          'reason', 'date', 'actorUid', 'orgId', 'at'
+        ]) &&
+        data.keys().hasOnly([
+          'eventId', 'uid', 'employeeName', 'taskId', 'points',
+          'reason', 'date', 'actorUid', 'orgId', 'at'
+        ]) &&
+        isValidId(data.eventId) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 64 &&
+        data.employeeName is string && data.employeeName.size() >= 1 && data.employeeName.size() <= 100 &&
+        data.taskId is string && data.taskId.size() <= 64 &&
+        data.points is number && data.points >= -20 && data.points <= 20 &&
+        data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 240 &&
+        isValidDate(data.date) &&
+        data.actorUid is string && data.actorUid.size() >= 1 && data.actorUid.size() <= 128 &&
+        data.orgId == 'kejmin' &&
+        data.at is timestamp;
+    }
+
+    function isValidAttendance(data) {
+      return data.keys().hasAll([
+          'recordId', 'uid', 'employeeName', 'date', 'in', 'out',
+          'breaks', 'location', 'note', 'correctedBy', 'actorUid',
+          'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'recordId', 'uid', 'employeeName', 'date', 'in', 'out',
+          'breaks', 'location', 'note', 'correctedBy', 'actorUid',
+          'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.recordId) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 64 &&
+        data.employeeName is string && data.employeeName.size() >= 1 && data.employeeName.size() <= 100 &&
+        isValidDate(data.date) &&
+        isValidOptionalTime(data.in) &&
+        isValidOptionalTime(data.out) &&
+        data.breaks is list && data.breaks.size() <= 10 &&
+        (data.breaks.size() == 0 || data.breaks[0] is string) &&
+        data.location is string && data.location.size() >= 1 && data.location.size() <= 60 &&
+        data.note is string && data.note.size() <= 300 &&
+        data.correctedBy is string && data.correctedBy.size() <= 100 &&
+        data.actorUid is string && data.actorUid.size() >= 1 && data.actorUid.size() <= 128 &&
+        data.orgId == 'kejmin' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidHoliday(data) {
+      return data.keys().hasAll(['holidayId', 'date', 'location', 'name', 'orgId', 'createdAt']) &&
+        data.keys().hasOnly(['holidayId', 'date', 'location', 'name', 'orgId', 'createdAt']) &&
+        isValidId(data.holidayId) &&
+        isValidDate(data.date) &&
+        data.location is string && data.location.size() >= 1 && data.location.size() <= 60 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        data.orgId == 'kejmin' &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasAll(['settingId', 'wd', 'st', 'en', 'gr', 'orgId', 'updatedAt']) &&
+        data.keys().hasOnly(['settingId', 'wd', 'st', 'en', 'gr', 'orgId', 'updatedAt']) &&
+        data.settingId == 'attendance' &&
+        data.wd is list && data.wd.size() <= 7 &&
+        (data.wd.size() == 0 || data.wd[0] is int) &&
+        isValidTime(data.st) &&
+        isValidTime(data.en) &&
+        data.gr is int && data.gr >= 0 && data.gr <= 240 &&
+        data.orgId == 'kejmin' &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll([
+          'logId', 'actor', 'actorUserId', 'actorUid', 'category',
+          'action', 'target', 'before', 'after', 'orgId', 'at'
+        ]) &&
+        data.keys().hasOnly([
+          'logId', 'actor', 'actorUserId', 'actorUid', 'category',
+          'action', 'target', 'before', 'after', 'orgId', 'at'
+        ]) &&
+        isValidId(data.logId) &&
+        data.actor is string && data.actor.size() >= 1 && data.actor.size() <= 100 &&
+        data.actorUserId is string && data.actorUserId.size() <= 40 &&
+        data.actorUid is string && data.actorUid.size() >= 1 && data.actorUid.size() <= 128 &&
+        data.category in ['Sign-in', 'Task', 'User', 'Delete', 'Attendance', 'Role', 'Security', 'Export', 'Upload'] &&
+        data.action is string && data.action.size() >= 1 && data.action.size() <= 500 &&
+        data.target is string && data.target.size() <= 160 &&
+        data.before is string && data.before.size() <= 500 &&
+        data.after is string && data.after.size() <= 500 &&
+        data.orgId == 'kejmin' &&
+        data.at is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll([
+          'notifId', 'recipientName', 'title', 'message', 'type',
+          'taskId', 'read', 'actorUid', 'orgId', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'notifId', 'recipientName', 'title', 'message', 'type',
+          'taskId', 'read', 'actorUid', 'orgId', 'createdAt'
+        ]) &&
+        isValidId(data.notifId) &&
+        data.recipientName is string && data.recipientName.size() >= 1 && data.recipientName.size() <= 100 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.message is string && data.message.size() >= 1 && data.message.size() <= 400 &&
+        data.type in ['assigned', 'sendback', 'reminder', 'overdue', 'escalation'] &&
+        data.taskId is string && data.taskId.size() <= 64 &&
+        data.read is bool &&
+        data.actorUid is string && data.actorUid.size() >= 1 && data.actorUid.size() <= 128 &&
+        data.orgId == 'kejmin' &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidSharedFolder(data) {
+      return data.keys().hasAll([
+          'folderId', 'name', 'parentId', 'driveFolderId', 'driveUrl',
+          'branch', 'location', 'accessScope', 'allowedEmpIds', 'description',
+          'createdBy', 'createdByEmpId', 'createdByUid', 'orgId',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'folderId', 'name', 'parentId', 'driveFolderId', 'driveUrl',
+          'branch', 'location', 'accessScope', 'allowedEmpIds', 'description',
+          'createdBy', 'createdByEmpId', 'createdByUid', 'orgId',
+          'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.folderId) && data.folderId.size() <= 64 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        data.parentId is string && data.parentId.size() <= 64 &&
+        data.driveFolderId is string && data.driveFolderId.size() <= 128 &&
+        data.driveUrl is string && data.driveUrl.size() <= 500 &&
+        data.branch is string && data.branch.size() >= 1 && data.branch.size() <= 60 &&
+        data.location is string && data.location.size() >= 1 && data.location.size() <= 60 &&
+        data.accessScope in ['all', 'branch', 'location', 'selected'] &&
+        data.allowedEmpIds is list && data.allowedEmpIds.size() <= 50 &&
+        (data.allowedEmpIds.size() == 0 || data.allowedEmpIds[0] is string) &&
+        data.description is string && data.description.size() <= 300 &&
+        data.createdBy is string && data.createdBy.size() >= 1 && data.createdBy.size() <= 100 &&
+        data.createdByEmpId is string && data.createdByEmpId.size() >= 1 && data.createdByEmpId.size() <= 32 &&
+        data.createdByUid is string && data.createdByUid.size() >= 1 && data.createdByUid.size() <= 128 &&
+        data.orgId == 'kejmin' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidSharedFile(data) {
+      return data.keys().hasAll([
+          'fileId', 'folderId', 'name', 'mimeType', 'sizeBytes',
+          'driveFileId', 'webViewLink', 'webContentLink',
+          'branch', 'location', 'category', 'description',
+          'accessScope', 'allowedEmpIds', 'allowDownload',
+          'uploadedBy', 'uploadedByEmpId', 'uploadedByUid',
+          'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'fileId', 'folderId', 'name', 'mimeType', 'sizeBytes',
+          'driveFileId', 'webViewLink', 'webContentLink',
+          'branch', 'location', 'category', 'description',
+          'accessScope', 'allowedEmpIds', 'allowDownload',
+          'uploadedBy', 'uploadedByEmpId', 'uploadedByUid',
+          'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.fileId) && data.fileId.size() <= 64 &&
+        data.folderId is string && data.folderId.size() <= 64 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 200 &&
+        data.mimeType is string && data.mimeType.size() >= 1 && data.mimeType.size() <= 120 &&
+        data.sizeBytes is number && data.sizeBytes >= 0 &&
+        data.driveFileId is string && data.driveFileId.size() >= 1 && data.driveFileId.size() <= 128 &&
+        data.webViewLink is string && data.webViewLink.size() >= 1 && data.webViewLink.size() <= 600 &&
+        data.webContentLink is string && data.webContentLink.size() <= 600 &&
+        data.branch is string && data.branch.size() >= 1 && data.branch.size() <= 60 &&
+        data.location is string && data.location.size() >= 1 && data.location.size() <= 60 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 60 &&
+        data.description is string && data.description.size() <= 400 &&
+        data.accessScope in ['all', 'branch', 'location', 'selected'] &&
+        data.allowedEmpIds is list && data.allowedEmpIds.size() <= 50 &&
+        (data.allowedEmpIds.size() == 0 || data.allowedEmpIds[0] is string) &&
+        data.allowDownload is bool &&
+        data.uploadedBy is string && data.uploadedBy.size() >= 1 && data.uploadedBy.size() <= 100 &&
+        data.uploadedByEmpId is string && data.uploadedByEmpId.size() >= 1 && data.uploadedByEmpId.size() <= 32 &&
+        data.uploadedByUid is string && data.uploadedByUid.size() >= 1 && data.uploadedByUid.size() <= 128 &&
+        data.orgId == 'kejmin' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // ===== Collection Rules =====
+
+    match /admins/{uid} {
+      allow get: if isVerified() && isValidId(uid) && (request.auth.uid == uid || isAdmin());
+      allow list: if false;
+      allow create: if isVerified() && isValidId(uid) && isValidAdminRecord(incoming()) &&
+        incoming().uid == uid && incoming().createdAt == request.time && isDeveloper();
+      allow update: if isVerified() && isValidId(uid) && isValidAdminRecord(incoming()) &&
+        incoming().uid == existing().uid && incoming().createdAt == existing().createdAt && isDeveloper();
+      allow delete: if isVerified() && isValidId(uid) && isDeveloper() && uid != request.auth.uid;
+    }
+
+    match /directory/{empDocId} {
+      allow get: if isVerified() && isValidId(empDocId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(empDocId) && isValidDirectoryEntry(incoming()) &&
+        incoming().docId == empDocId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time && (
+          isDeveloper() ||
+          (isAdmin() && roleRank(incoming().role) < roleRank(actorRole()))
+        );
+      allow update: if isVerified() && isValidId(empDocId) && isValidDirectoryEntry(incoming()) &&
+        incoming().docId == existing().docId &&
+        incoming().empId == existing().empId &&
+        incoming().orgId == existing().orgId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isDeveloper() || (
+            isAdmin() &&
+            existing().authUid != request.auth.uid &&
+            roleRank(existing().role) < roleRank(actorRole()) &&
+            roleRank(incoming().role) < roleRank(actorRole())
+          ) || (
+            existing().authUid == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'designation', 'photoUrl', 'updatedAt'])
+          )
+        );
+      allow delete: if isVerified() && isValidId(empDocId) && (
+        isDeveloper() || (
+          isAdmin() &&
+          existing().authUid != request.auth.uid &&
+          roleRank(existing().role) < roleRank(actorRole())
+        )
+      );
+    }
+
+    match /users/{empDocId} {
+      allow get: if isVerified() && isValidId(empDocId) && (
+        isAdmin() || (resource != null && existing().authUid == request.auth.uid)
+      );
+      allow list: if isVerified() && (
+        resource.data.authUid == request.auth.uid || isDeveloper()
+      );
+      allow create: if isVerified() && isValidId(empDocId) && isValidUserPrivate(incoming()) &&
+        incoming().docId == empDocId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time && (
+          isDeveloper() || (
+            isAdmin() &&
+            incoming().twoStepEnabled == false &&
+            existsAfter(/databases/$(database)/documents/directory/$(empDocId)) &&
+            roleRank(getAfter(/databases/$(database)/documents/directory/$(empDocId)).data.role) < roleRank(actorRole())
+          )
+        );
+      allow update: if isVerified() && isValidId(empDocId) && isValidUserPrivate(incoming()) &&
+        incoming().docId == existing().docId &&
+        incoming().empId == existing().empId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isDeveloper() || (
+            isAdmin() &&
+            existing().authUid != request.auth.uid &&
+            exists(/databases/$(database)/documents/directory/$(empDocId)) &&
+            roleRank(get(/databases/$(database)/documents/directory/$(empDocId)).data.role) < roleRank(actorRole())
+          ) || (
+            existing().authUid == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['phone', 'passwordHash', 'passwordSalt', 'twoStepEnabled', 'updatedAt'])
+          )
+        );
+      allow delete: if isVerified() && isValidId(empDocId) && (
+        isDeveloper() || (
+          isAdmin() &&
+          existing().authUid != request.auth.uid &&
+          exists(/databases/$(database)/documents/directory/$(empDocId)) &&
+          roleRank(get(/databases/$(database)/documents/directory/$(empDocId)).data.role) < roleRank(actorRole())
+        )
+      );
+    }
+
+    match /roles/{roleId} {
+      allow get: if isVerified() && isValidId(roleId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(roleId) && isValidRole(incoming()) &&
+        incoming().roleId == roleId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time && (
+          isDeveloper() || (
+            isAdmin() &&
+            incoming().builtin == false &&
+            roleRank(incoming().name) < roleRank(actorRole()) &&
+            !(6 in incoming().permissions)
+          )
+        );
+      allow update: if isVerified() && isValidId(roleId) && isValidRole(incoming()) &&
+        incoming().roleId == existing().roleId &&
+        incoming().orgId == existing().orgId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isDeveloper() || (
+            isAdmin() &&
+            roleRank(existing().name) < roleRank(actorRole()) &&
+            roleRank(incoming().name) < roleRank(actorRole()) &&
+            !(6 in incoming().permissions)
+          )
+        );
+      allow delete: if isVerified() && isValidId(roleId) && existing().builtin == false && (
+        isDeveloper() || (
+          isAdmin() && roleRank(existing().name) < roleRank(actorRole())
+        )
+      );
+    }
+
+    match /branches/{branchId} {
+      allow get: if isVerified() && isValidId(branchId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(branchId) && isValidOrgUnit(incoming()) &&
+        incoming().id == branchId && incoming().createdAt == request.time && isAdmin();
+      allow update: if isVerified() && isValidId(branchId) && isValidOrgUnit(incoming()) &&
+        incoming().id == existing().id && incoming().orgId == existing().orgId &&
+        incoming().createdAt == existing().createdAt && isAdmin();
+      allow delete: if isVerified() && isValidId(branchId) && isAdmin();
+    }
+
+    match /locations/{locationId} {
+      allow get: if isVerified() && isValidId(locationId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(locationId) && isValidOrgUnit(incoming()) &&
+        incoming().id == locationId && incoming().createdAt == request.time && isAdmin();
+      allow update: if isVerified() && isValidId(locationId) && isValidOrgUnit(incoming()) &&
+        incoming().id == existing().id && incoming().orgId == existing().orgId &&
+        incoming().createdAt == existing().createdAt && isAdmin();
+      allow delete: if isVerified() && isValidId(locationId) && isAdmin();
+    }
+
+    match /paths/{pathId} {
+      allow get: if isVerified() && isValidId(pathId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(pathId) && isValidPath(incoming()) &&
+        incoming().pathId == pathId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time && isAdmin();
+      allow update: if isVerified() && isValidId(pathId) && isValidPath(incoming()) &&
+        incoming().pathId == existing().pathId &&
+        incoming().orgId == existing().orgId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && isAdmin();
+      allow delete: if isVerified() && isValidId(pathId) && isAdmin();
+    }
+
+    match /tasks/{taskId} {
+      allow get: if isVerified() && isValidId(taskId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(taskId) && isValidTask(incoming()) &&
+        incoming().taskId == taskId &&
+        incoming().createdByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (isAdmin() || (incoming().stage == 0 && incoming().status == 'open'));
+      allow update: if isVerified() && isValidId(taskId) && isValidTask(incoming()) &&
+        incoming().taskId == existing().taskId &&
+        incoming().orgId == existing().orgId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().createdByUid == existing().createdByUid &&
+        incoming().updatedAt == request.time &&
+        (existing().status != 'closed' || isAdmin()) && (
+          isAdmin() ||
+          (
+            existing().createdByUid == request.auth.uid &&
+            existing().status == 'open' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['title', 'branch', 'location', 'priority', 'dueAt', 'dueTime', 'repeatMode', 'repeatSeriesId', 'path', 'stage', 'status', 'updatedAt'])
+          ) ||
+          (
+            incoming().stage == existing().stage + 1 &&
+            incoming().status == (incoming().stage >= existing().path.size() ? 'closed' : 'open') &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['stage', 'status', 'updatedAt'])
+          ) ||
+          (
+            existing().stage > 0 &&
+            incoming().stage == existing().stage - 1 &&
+            incoming().status == 'open' &&
+            incoming().lastSendBackReason.size() >= 3 &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['stage', 'status', 'lastSendBackReason', 'updatedAt'])
+          ) ||
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['proofs', 'updatedAt'])
+          )
+        );
+      allow delete: if isVerified() && isValidId(taskId) && (
+        isAdmin() ||
+        (existing().createdByUid == request.auth.uid && existing().status == 'open') ||
+        existing().orgId == 'kejmin'
+      );
+    }
+
+    match /scoreEvents/{eventId} {
+      allow get: if isVerified() && isValidId(eventId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(eventId) && isValidScoreEvent(incoming()) &&
+        incoming().eventId == eventId &&
+        incoming().actorUid == request.auth.uid &&
+        incoming().at == request.time;
+      allow update: if false;
+      allow delete: if isVerified() && isValidId(eventId) && isAdmin() && eventId.matches('^scr_seed_[0-9]+$');
+    }
+
+    match /attendance/{recordId} {
+      allow get: if isVerified() && isValidId(recordId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(recordId) && isValidAttendance(incoming()) &&
+        incoming().recordId == recordId &&
+        incoming().actorUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerified() && isValidId(recordId) && isValidAttendance(incoming()) &&
+        incoming().recordId == existing().recordId &&
+        incoming().uid == existing().uid &&
+        incoming().date == existing().date &&
+        incoming().orgId == existing().orgId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() || (
+            existing().actorUid == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['out', 'breaks', 'note', 'updatedAt'])
+          ) || (
+            existing().orgId == 'kejmin' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['in', 'out', 'note', 'correctedBy', 'updatedAt']) &&
+            incoming().note.size() >= 3 &&
+            incoming().correctedBy.size() >= 1
+          )
+        );
+      allow delete: if isVerified() && isValidId(recordId) && isAdmin();
+    }
+
+    match /holidays/{holidayId} {
+      allow get: if isVerified() && isValidId(holidayId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(holidayId) && isValidHoliday(incoming()) &&
+        incoming().holidayId == holidayId && incoming().createdAt == request.time && isAdmin();
+      allow update: if isVerified() && isValidId(holidayId) && isValidHoliday(incoming()) &&
+        incoming().holidayId == existing().holidayId &&
+        incoming().orgId == existing().orgId &&
+        incoming().createdAt == existing().createdAt && isAdmin();
+      allow delete: if isVerified() && isValidId(holidayId) && isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow get: if isVerified() && isValidId(settingId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(settingId) && isValidSettings(incoming()) &&
+        incoming().settingId == settingId && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isVerified() && isValidId(settingId) && isValidSettings(incoming()) &&
+        incoming().settingId == existing().settingId &&
+        incoming().orgId == existing().orgId &&
+        incoming().updatedAt == request.time && isAdmin();
+      allow delete: if false;
+    }
+
+    match /auditLog/{logId} {
+      allow get: if isVerified() && isValidId(logId) && isDeveloper();
+      allow list: if isVerified() && isDeveloper() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(logId) && isValidAuditLog(incoming()) &&
+        incoming().logId == logId &&
+        incoming().actorUid == request.auth.uid &&
+        incoming().at == request.time;
+      allow update: if false;
+      allow delete: if isVerified() && isValidId(logId) && isDeveloper() && logId.matches('^log_seed_[0-9]+$');
+    }
+
+    match /notifications/{notifId} {
+      allow get: if isVerified() && isValidId(notifId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(notifId) && isValidNotification(incoming()) &&
+        incoming().notifId == notifId &&
+        incoming().actorUid == request.auth.uid &&
+        incoming().createdAt == request.time;
+      allow update: if isVerified() && isValidId(notifId) && isValidNotification(incoming()) &&
+        incoming().notifId == existing().notifId &&
+        incoming().orgId == existing().orgId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().actorUid == existing().actorUid &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+      allow delete: if isVerified() && isValidId(notifId) && isAdmin();
+    }
+
+    match /sharedFolders/{folderId} {
+      allow get: if isVerified() && isValidId(folderId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(folderId) && isValidSharedFolder(incoming()) &&
+        incoming().folderId == folderId &&
+        incoming().createdByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerified() && isValidId(folderId) && isValidSharedFolder(incoming()) &&
+        incoming().folderId == existing().folderId &&
+        incoming().orgId == existing().orgId &&
+        incoming().createdByUid == existing().createdByUid &&
+        incoming().createdByEmpId == existing().createdByEmpId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() || (
+            existing().createdByUid == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'parentId', 'branch', 'location', 'accessScope', 'allowedEmpIds',
+              'description', 'driveFolderId', 'driveUrl', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isVerified() && isValidId(folderId) && (
+        isAdmin() || existing().createdByUid == request.auth.uid
+      );
+    }
+
+    match /sharedFiles/{fileId} {
+      allow get: if isVerified() && isValidId(fileId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(fileId) && isValidSharedFile(incoming()) &&
+        incoming().fileId == fileId &&
+        incoming().uploadedByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (isDeveloper() || incoming().folderId.size() > 0);
+      allow update: if isVerified() && isValidId(fileId) && isValidSharedFile(incoming()) &&
+        incoming().fileId == existing().fileId &&
+        incoming().driveFileId == existing().driveFileId &&
+        incoming().orgId == existing().orgId &&
+        incoming().uploadedByUid == existing().uploadedByUid &&
+        incoming().uploadedByEmpId == existing().uploadedByEmpId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (isDeveloper() || incoming().folderId.size() > 0 || incoming().folderId == existing().folderId) && (
+          isAdmin() || (
+            existing().uploadedByUid == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'folderId', 'mimeType', 'sizeBytes', 'branch', 'location', 'category',
+              'description', 'accessScope', 'allowedEmpIds', 'allowDownload',
+              'webViewLink', 'webContentLink', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isVerified() && isValidId(fileId) && (
+        isAdmin() || existing().uploadedByUid == request.auth.uid
+      );
+    }
+  }
+}

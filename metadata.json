@@ -1,0 +1,6 @@
+{
+  "name": "KEJMIN OPS – KEJ Mineral",
+  "description": "Operations, workflow tasks, KPI scoring, attendance, roles, and audit log platform for KEJ Minerals Private Limited.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
