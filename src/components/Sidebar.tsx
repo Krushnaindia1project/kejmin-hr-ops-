@@ -4,7 +4,12 @@ import { DirectoryEntry, ViewId } from '../types';
 interface SidebarProps {
   me: DirectoryEntry;
   canManageUsers: boolean;
+  canCreateTasks: boolean;
+  canDesignPaths: boolean;
+  canAccessShareFolder: boolean;
   activeView: ViewId;
+  waitingOnMeCount?: number;
+  openTicketsCount?: number;
   mobileOpen: boolean;
   onCloseMobile: () => void;
   onNavigate: (view: ViewId) => void;
@@ -14,7 +19,12 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   me,
   canManageUsers,
+  canCreateTasks,
+  canDesignPaths,
+  canAccessShareFolder,
   activeView,
+  waitingOnMeCount = 0,
+  openTicketsCount = 0,
   mobileOpen,
   onCloseMobile,
   onNavigate,
@@ -31,6 +41,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [focused, setFocused] = useState(false);
   const leaveTimer = useRef<number | null>(null);
   const navRef = useRef<HTMLElement>(null);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
 
   useEffect(() => {
     document.body.classList.toggle('sb-c', retracted);
@@ -40,6 +52,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       // ignore storage errors
     }
   }, [retracted]);
+
+  // Lock background page scroll while mobile drawer is open
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [mobileOpen]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -79,6 +101,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ref={navRef}
         className={`glass${isCollapsedVisual ? ' cl' : ''}${mobileOpen ? ' open' : ''}`}
         id="sidenav"
+        onTouchStart={(e) => {
+          if (!mobileOpen || e.touches.length !== 1) return;
+          touchStartX.current = e.touches[0].clientX;
+          touchStartY.current = e.touches[0].clientY;
+        }}
+        onTouchEnd={(e) => {
+          if (!mobileOpen || touchStartX.current === null || touchStartY.current === null) return;
+          const dx = e.changedTouches[0].clientX - touchStartX.current;
+          const dy = Math.abs(e.changedTouches[0].clientY - touchStartY.current);
+          touchStartX.current = null;
+          touchStartY.current = null;
+          if (dx < -56 && dy < 80) onCloseMobile();
+        }}
         onMouseEnter={() => {
           if (leaveTimer.current) window.clearTimeout(leaveTimer.current);
           setHovered(true);
@@ -134,7 +169,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <path d="M15 5l-7 7 7 7" />
             </svg>
           </button>
+          <button
+            className="m-sb-close"
+            type="button"
+            aria-label="Close navigation menu"
+            onClick={onCloseMobile}
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
         </div>
+
+        <button
+          type="button"
+          className="m-sb-profile"
+          onClick={() => clickNav('prof')}
+        >
+          <span
+            className={`av${me.photoUrl ? ' ph' : ''}`}
+            style={{
+              width: 40,
+              height: 40,
+              fontSize: 15,
+              flex: 'none',
+              backgroundImage: me.photoUrl ? `url("${me.photoUrl}")` : undefined,
+            }}
+          >
+            {me.name[0]}
+          </span>
+          <span className="m-sb-prof-copy">
+            <b>{me.name}</b>
+            <small>{me.role} · {me.location}</small>
+          </span>
+        </button>
 
         <div className={`nav${activeView === 'dash' ? ' on' : ''}`} data-v="dash" onClick={() => clickNav('dash')}>
           <svg className="ni" viewBox="0 0 24 24" aria-hidden="true">
@@ -168,24 +236,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <path d="M3.5 6l1.5 1.5L7 5M3.5 12l1.5 1.5L7 11M3.5 18l1.5 1.5L7 17" />
           </svg>
           <span className="nt">Tasks</span>
+          {waitingOnMeCount > 0 && (
+            <span className="m-nav-cnt" aria-label={`${waitingOnMeCount} waiting on you`}>
+              {waitingOnMeCount > 99 ? '99+' : waitingOnMeCount}
+            </span>
+          )}
         </div>
 
-        <div className={`nav${activeView === 'share' ? ' on' : ''}`} data-v="share" onClick={() => clickNav('share')}>
-          <svg className="ni" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
-            <path d="M12 11v5M9.5 13.5L12 11l2.5 2.5" />
-          </svg>
-          <span className="nt">Share Folder</span>
-        </div>
+        {canAccessShareFolder && (
+          <div className={`nav${activeView === 'share' ? ' on' : ''}`} data-v="share" onClick={() => clickNav('share')}>
+            <svg className="ni" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+              <path d="M12 11v5M9.5 13.5L12 11l2.5 2.5" />
+            </svg>
+            <span className="nt">Share Folder</span>
+          </div>
+        )}
 
-        <div className={`nav${activeView === 'flow' ? ' on' : ''}`} data-v="flow" onClick={() => clickNav('flow')}>
-          <svg className="ni" viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="3" y="3" width="6" height="6" rx="1" />
-            <rect x="15" y="15" width="6" height="6" rx="1" />
-            <path d="M6 9v3a3 3 0 003 3h6" />
-          </svg>
-          <span className="nt">Workflow builder</span>
-        </div>
+        {(canCreateTasks || canDesignPaths) && (
+          <div className={`nav${activeView === 'flow' ? ' on' : ''}`} data-v="flow" onClick={() => clickNav('flow')}>
+            <svg className="ni" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="3" width="6" height="6" rx="1" />
+              <rect x="15" y="15" width="6" height="6" rx="1" />
+              <path d="M6 9v3a3 3 0 003 3h6" />
+            </svg>
+            <span className="nt">Workflow builder</span>
+          </div>
+        )}
 
         <div className={`nav${activeView === 'kpi' ? ' on' : ''}`} data-v="kpi" onClick={() => clickNav('kpi')}>
           <svg className="ni" viewBox="0 0 24 24" aria-hidden="true">
@@ -194,19 +271,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span className="nt">KPI &amp; scores</span>
         </div>
 
+        <div className={`nav${activeView === 'tickets' ? ' on' : ''}`} data-v="tickets" onClick={() => clickNav('tickets')}>
+          <svg className="ni" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 8a2 2 0 012-2h14a2 2 0 012 2v2a2 2 0 000 4v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2a2 2 0 000-4V8z" />
+            <path d="M10 6v12" strokeDasharray="2 2" />
+          </svg>
+          <span className="nt">Tickets</span>
+          {openTicketsCount > 0 && (
+            <span className="m-nav-cnt" aria-label={`${openTicketsCount} open tickets`}>
+              {openTicketsCount > 99 ? '99+' : openTicketsCount}
+            </span>
+          )}
+        </div>
+
         <div className={`nav${activeView === 'roles' ? ' on' : ''}`} data-v="roles" onClick={() => clickNav('roles')}>
           <svg className="ni" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
           </svg>
           <span className="nt">Roles &amp; access</span>
-        </div>
-
-        <div className={`nav${activeView === 'blue' ? ' on' : ''}`} data-v="blue" onClick={() => clickNav('blue')}>
-          <svg className="ni" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3l9 5-9 5-9-5z" />
-            <path d="M3 13l9 5 9-5" />
-          </svg>
-          <span className="nt">Blueprint</span>
         </div>
 
         {canManageUsers && (
@@ -239,6 +321,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div style={{ flex: 1 }} />
+        <div className={`nav${activeView === 'blue' ? ' on' : ''}`} data-v="blue" onClick={() => clickNav('blue')}>
+          <svg className="ni" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3l9 5-9 5-9-5z" />
+            <path d="M3 13l9 5 9-5" />
+          </svg>
+          <span className="nt">Blueprint</span>
+        </div>
         <button
           className="btn r"
           id="out"

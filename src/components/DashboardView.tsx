@@ -21,7 +21,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const done = myTasks.length - open.length;
   const highOpen = open.filter((t) => t.priority === 'High').length;
   const overdueCount = open.filter((t) => t.dueAt < td).length;
-  const myTurnCount = open.filter((t) => t.path[t.stage] === me.name).length;
+  const myTurnCount = open.filter(
+    (t) => t.path[t.stage] === me.name && !(t.repeatMode === 'daily' && t.dueAt > td)
+  ).length;
 
   const hour = new Date().getHours();
   const greeting =
@@ -88,15 +90,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             const count = myTasks.filter((t) => t.branch === b).length;
             const pct = myTasks.length ? (count / myTasks.length) * 100 : 0;
             return (
-              <div
-                key={b}
-                style={{ display: 'flex', gap: 12, alignItems: 'center', margin: '8px 0' }}
-              >
-                <span style={{ width: 150 }}>{b}</span>
-                <div className="bar" style={{ flex: 1 }}>
+              <div key={b} className="br-row">
+                <span className="br-name">{b}</span>
+                <div className="bar br-bar">
                   <i style={{ width: `${pct}%` }} />
                 </div>
-                <b>{count}</b>
+                <b className="br-cnt">{count}</b>
               </div>
             );
           })}

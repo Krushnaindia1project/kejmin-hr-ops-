@@ -27,3 +27,7 @@
 | 10 | `/auditLog/{logId}` | Audit Log Deletion / Forgery | Non-developer reads `/auditLog` or admin attempts `delete` on `/auditLog/l1` | `PERMISSION_DENIED` |
 | 11 | `/tasks/{taskId}` | Client Timestamp Forgery | Create task with client-backdated `createdAt` (`!= request.time`) | `PERMISSION_DENIED` |
 | 12 | `/directory/{empDocId}` | Value Poisoning on Update | Non-admin updates own profile with `name: 12345` or oversized 500-char name | `PERMISSION_DENIED` |
+| 13 | `/supportTickets/{ticketId}` | Identity Spoofing / Shadow Field | Create ticket with `reporterUid != request.auth.uid` or ghost field `isAdmin: true` | `PERMISSION_DENIED` |
+| 14 | `/supportTickets/{ticketId}` | Closed Ticket Field Mutation | Non-admin modifies `title` or `pri` on a `closed` ticket without reopening it | `PERMISSION_DENIED` |
+| 15 | `/ticketAttachments/{attachmentId}` | Orphaned Attachment Injection | Create attachment referencing non-existent `ticketId` or oversized `data` (>800KB) | `PERMISSION_DENIED` |
+

@@ -106,6 +106,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
               value={empId}
               onChange={(e) => setEmpId(e.target.value)}
               autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
             />
             <label htmlFor="pw">Password</label>
             <div style={{ position: 'relative' }}>
@@ -140,9 +143,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
               disabled={busy}
               onClick={handleGoogleSignIn}
             >
-              Continue with Google (Firebase Auth)
+              Continue with Google (Admin / Owner)
             </button>
           </div>
+
+          <footer className="lfoot">
+            <div>2026 © All Rights Reserved.</div>
+            <div>
+              Designed and developed by <strong>Krushna M.</strong> | Version 4.0.1.2
+            </div>
+          </footer>
         </div>
       </div>
     </section>

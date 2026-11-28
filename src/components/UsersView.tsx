@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   canManageTargetRole,
   canManageUser,
@@ -17,6 +18,7 @@ interface UsersViewProps {
   branches: string[];
   locations: string[];
   tasks: TaskDoc[];
+  boundEmpIds?: string[] | null;
   onCreateUser: (params: {
     empId: string;
     name: string;
@@ -36,6 +38,8 @@ interface UsersViewProps {
   onDeleteUser: (target: DirectoryEntry) => Promise<void>;
 }
 
+type LoginFilter = 'All' | 'Active' | 'Pending';
+
 export const UsersView: React.FC<UsersViewProps> = ({
   me,
   directory,
@@ -43,6 +47,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
   branches,
   locations,
   tasks,
+  boundEmpIds,
   onCreateUser,
   onUpdateUser,
   onResetPassword,
@@ -50,6 +55,9 @@ export const UsersView: React.FC<UsersViewProps> = ({
 }) => {
   const [queryText, setQueryText] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
+  const [branchFilter, setBranchFilter] = useState('All');
+  const [locFilter, setLocFilter] = useState('All');
+  const [loginFilter, setLoginFilter] = useState<LoginFilter>('All');
   const [busy, setBusy] = useState(false);
 
   // Add modal
@@ -89,20 +97,119 @@ export const UsersView: React.FC<UsersViewProps> = ({
     [roles, directory]
   );
 
+  const allBranches = useMemo(
+    () =>
+      Array.from(
+        new Set([...branches, ...directory.map((d) => d.branch).filter(Boolean)])
+      ).sort((a, b) => a.localeCompare(b)),
+    [branches, directory]
+  );
+
+  const allLocations = useMemo(
+    () =>
+      Array.from(
+        new Set([...locations, ...directory.map((d) => d.location).filter(Boolean)])
+      ).sort((a, b) => a.localeCompare(b)),
+    [locations, directory]
+  );
+
   // Roles this signed-in user is strictly permitted to assign
   const assignableRoleNames = useMemo(
     () => allRoleNames.filter((r) => canManageTargetRole(me.role, r)),
     [allRoleNames, me.role]
   );
 
+  const boundSet = useMemo(() => (boundEmpIds ? new Set(boundEmpIds) : null), [boundEmpIds]);
+
+  const isDirectLoginActive = (u: DirectoryEntry): boolean => {
+    if (boundSet) return boundSet.has(u.empId);
+    return Boolean(u.authUid);
+  };
+
+  // Count currently open tasks waiting on each employee name
+  const openTasksByName = useMemo(() => {
+    const map: Record<string, number> = {};
+    tasks.forEach((t) => {
+      if (t.stage < t.path.length && t.status !== 'closed') {
+        const assignee = t.path[t.stage];
+        if (assignee) map[assignee] = (map[assignee] || 0) + 1;
+      }
+    });
+    return map;
+  }, [tasks]);
+
+  const pendingActivationUsers = useMemo(
+    () =>
+      directory.filter(
+        (u) =>
+          u.active &&
+          u.empId !== 'developer' &&
+          canManageUser(me, u) &&
+          !isDirectLoginActive(u)
+      ),
+    [directory, me, boundSet]
+  );
+
+  const stats = useMemo(() => {
+    let directCount = 0;
+    let pendingCount = 0;
+    let totalOpenTasks = 0;
+    let assigneesWithOpen = 0;
+    directory.forEach((u) => {
+      const direct = isDirectLoginActive(u);
+      if (direct || u.empId === 'developer') directCount++;
+      else pendingCount++;
+      const openCnt = openTasksByName[u.name] || 0;
+      totalOpenTasks += openCnt;
+      if (openCnt > 0) assigneesWithOpen++;
+    });
+    return {
+      total: directory.length,
+      directCount,
+      pendingCount,
+      totalOpenTasks,
+      assigneesWithOpen,
+    };
+  }, [directory, boundSet, openTasksByName]);
+
   const filtered = useMemo(() => {
     const q = queryText.trim().toLowerCase();
-    return directory.filter(
-      (u) =>
-        (!q || u.empId.includes(q) || u.name.toLowerCase().includes(q)) &&
-        (roleFilter === 'All' || u.role === roleFilter)
-    );
-  }, [directory, queryText, roleFilter]);
+    return directory
+      .filter((u) => {
+        if (q) {
+          const hay = `${u.name} ${u.empId} ${u.role} ${u.branch} ${u.location}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        if (roleFilter !== 'All' && u.role !== roleFilter) return false;
+        if (branchFilter !== 'All' && u.branch !== branchFilter) return false;
+        if (locFilter !== 'All' && u.location !== locFilter) return false;
+        if (loginFilter !== 'All') {
+          const direct = isDirectLoginActive(u) || u.empId === 'developer';
+          if (loginFilter === 'Active' && !direct) return false;
+          if (loginFilter === 'Pending' && direct) return false;
+        }
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          getRoleRank(b.role) - getRoleRank(a.role) || a.name.localeCompare(b.name)
+      );
+  }, [directory, queryText, roleFilter, branchFilter, locFilter, loginFilter, boundSet]);
+
+  const hasFilters =
+    queryText.trim() !== '' ||
+    roleFilter !== 'All' ||
+    branchFilter !== 'All' ||
+    locFilter !== 'All' ||
+    loginFilter !== 'All';
+
+  const resetFilters = () => {
+    setQueryText('');
+    setRoleFilter('All');
+    setBranchFilter('All');
+    setLocFilter('All');
+    setLoginFilter('All');
+  };
 
   const nameTaken = (name: string, excludeEmpId: string) =>
     directory.some(
@@ -258,113 +365,362 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
   return (
     <div className="view on" id="v-usr">
-      <div className="glass sec" style={{ marginTop: 0 }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 10,
-            flexWrap: 'wrap',
-          }}
+      {/* Header & Filter Control Panel */}
+      <section className="usr-panel" aria-label="User management controls">
+        <div className="usr-hd">
+          <div className="usr-title-wrap">
+            <h3 className="usr-title">User management</h3>
+            <div className="usr-meta-line">
+              <span>{directory.length} accounts</span>
+              <span aria-hidden="true">·</span>
+              <span>{allRoleNames.length} roles</span>
+              <span aria-hidden="true">·</span>
+              <span>{allLocations.length} locations</span>
+            </div>
+          </div>
+
+          <div className="usr-actions">
+            {hasFilters && (
+              <button
+                className="usr-btn usr-btn-ghost"
+                type="button"
+                onClick={resetFilters}
+              >
+                Reset filters
+              </button>
+            )}
+            {assignableRoleNames.length > 0 && (
+              <button
+                className="usr-btn usr-btn-primary"
+                id="uadd"
+                type="button"
+                onClick={openAdd}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Add user
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="usr-body">
+          <div className="usr-filters">
+            <div className="usr-field usr-field-search">
+              <label htmlFor="uq">Search</label>
+              <input
+                id="uq"
+                type="search"
+                placeholder="Name, @user ID, role, branch or location..."
+                value={queryText}
+                onChange={(e) => setQueryText(e.target.value)}
+              />
+            </div>
+
+            <div className="usr-field">
+              <label htmlFor="ur">Role</label>
+              <select
+                id="ur"
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+              >
+                <option value="All">All roles</option>
+                {allRoleNames.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="usr-field">
+              <label htmlFor="ub">Branch</label>
+              <select
+                id="ub"
+                value={branchFilter}
+                onChange={(e) => setBranchFilter(e.target.value)}
+              >
+                <option value="All">All branches</option>
+                {allBranches.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="usr-field">
+              <label htmlFor="ul">Location</label>
+              <select
+                id="ul"
+                value={locFilter}
+                onChange={(e) => setLocFilter(e.target.value)}
+              >
+                <option value="All">All locations</option>
+                {allLocations.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="usr-field">
+              <label htmlFor="ust">Sign-in status</label>
+              <select
+                id="ust"
+                value={loginFilter}
+                onChange={(e) => setLoginFilter(e.target.value as LoginFilter)}
+              >
+                <option value="All">All statuses</option>
+                <option value="Active">Direct login active</option>
+                <option value="Pending">Needs activation</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 4-Card Summary Strip */}
+      <div className="usr-stats" aria-label="Account summary metrics">
+        <button
+          type="button"
+          className={`usr-stat${loginFilter === 'All' && !hasFilters ? ' is-sel' : ''}`}
+          onClick={resetFilters}
         >
-          <h3 style={{ margin: 0 }}>User management</h3>
-          {assignableRoleNames.length > 0 && (
-            <button className="btn" id="uadd" type="button" onClick={openAdd}>
-              Add user
+          <span className="usr-stat-lbl">Total accounts</span>
+          <b className="usr-stat-val">{stats.total}</b>
+          <span className="usr-stat-sub">
+            {filtered.length} shown in table
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className={`usr-stat${loginFilter === 'Active' ? ' is-sel' : ''}`}
+          onClick={() => setLoginFilter((prev) => (prev === 'Active' ? 'All' : 'Active'))}
+        >
+          <span className="usr-stat-lbl">Direct login active</span>
+          <b className="usr-stat-val usr-val-ok">{stats.directCount}</b>
+          <span className="usr-stat-sub">User ID + password ready</span>
+        </button>
+
+        <button
+          type="button"
+          className={`usr-stat${loginFilter === 'Pending' ? ' is-sel' : ''}`}
+          onClick={() => setLoginFilter((prev) => (prev === 'Pending' ? 'All' : 'Pending'))}
+        >
+          <span className="usr-stat-lbl">Needs activation</span>
+          <b className={`usr-stat-val${stats.pendingCount > 0 ? ' usr-val-warn' : ''}`}>
+            {stats.pendingCount}
+          </b>
+          <span className="usr-stat-sub">
+            {stats.pendingCount > 0 ? 'Click to filter pending' : 'All accounts activated'}
+          </span>
+        </button>
+
+        <div className="usr-stat usr-stat-static">
+          <span className="usr-stat-lbl">Open workload</span>
+          <b className="usr-stat-val">{stats.totalOpenTasks}</b>
+          <span className="usr-stat-sub">
+            Across {stats.assigneesWithOpen} active assignee{stats.assigneesWithOpen === 1 ? '' : 's'}
+          </span>
+        </div>
+      </div>
+
+      {/* One-time Activation Notice */}
+      {pendingActivationUsers.length > 0 && (
+        <div className="usr-notice" role="status">
+          <div className="usr-notice-txt">
+            <b>
+              {pendingActivationUsers.length} account
+              {pendingActivationUsers.length > 1 ? 's' : ''} awaiting one-time sign-in activation
+            </b>
+            <span>
+              {' '}
+              ({pendingActivationUsers.map((u) => `@${u.empId}`).join(', ')}). Click{' '}
+              <b>Activate login</b> on each row and set their password so they can sign in directly
+              with User ID + Password.
+            </span>
+          </div>
+          {loginFilter !== 'Pending' && (
+            <button
+              type="button"
+              className="usr-btn usr-btn-secondary"
+              onClick={() => setLoginFilter('Pending')}
+            >
+              Show pending
             </button>
           )}
         </div>
+      )}
 
-        <div className="row" style={{ margin: '14px 0' }}>
-          <div>
-            <label htmlFor="uq">Search</label>
-            <input
-              id="uq"
-              placeholder="Name or user ID"
-              value={queryText}
-              onChange={(e) => setQueryText(e.target.value)}
-            />
+      {/* Structured Single-Row Directory Table */}
+      <section className="usr-table-card" aria-label="User directory table">
+        <div className="usr-table-bar">
+          <div className="usr-table-title">
+            <h4>Directory</h4>
+            <span className="usr-table-count">
+              Showing {filtered.length} of {directory.length}
+            </span>
           </div>
-          <div>
-            <label htmlFor="ur">Role</label>
-            <select
-              id="ur"
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-            >
-              <option value="All">All</option>
-              {allRoleNames.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
+          <div className="usr-table-hint">
+            {isDev
+              ? 'Full Developer access across all roles'
+              : `Hierarchy scope: ${me.role} manages strictly lower roles`}
           </div>
         </div>
 
-        <div className="tbl">
-          <table id="ut">
+        <div className="usr-tbl-wrap m-card-tbl">
+          <table id="ut" className="usr-table">
             <thead>
               <tr>
-                <th>User</th>
-                <th>Role</th>
-                <th>Branch</th>
-                <th>Location</th>
-                <th />
+                <th className="usr-col-idx">#</th>
+                <th className="usr-col-user">User</th>
+                <th className="usr-col-id">User ID</th>
+                <th className="usr-col-role">Role</th>
+                <th className="usr-col-branch">Branch</th>
+                <th className="usr-col-loc">Location</th>
+                <th className="usr-col-join">Joined</th>
+                <th className="usr-col-tasks">Tasks</th>
+                <th className="usr-col-status">Sign-in</th>
+                <th className="usr-col-acts">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((u) => {
-                const manageable = canManageUser(me, u);
-                const isSelf = u.empId === me.empId;
-                return (
-                  <tr key={u.docId}>
-                    <td>
-                      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                        <span
-                          className={`av${u.photoUrl ? ' ph' : ''}`}
-                          style={{
-                            width: 34,
-                            height: 34,
-                            flex: 'none',
-                            fontSize: 14,
-                            backgroundImage: u.photoUrl ? `url("${u.photoUrl}")` : undefined,
-                          }}
-                        >
-                          {u.name[0]}
-                        </span>
-                        <div>
-                          <b>{u.name}</b>
-                          <div className="sub">@{u.empId}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>{u.role}</td>
-                    <td>{u.branch || '-'}</td>
-                    <td>{u.location}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      {manageable ? (
-                        <>
-                          <button className="btn g" type="button" onClick={() => openEdit(u)}>
-                            Edit
-                          </button>{' '}
+              {filtered.length === 0 ? (
+                <tr className="usr-empty-row">
+                  <td colSpan={10}>
+                    <div className="usr-empty">
+                      <p>No user accounts match the current filters.</p>
+                      <div className="usr-empty-acts">
+                        {hasFilters && (
                           <button
-                            className="btn g"
                             type="button"
-                            onClick={() => {
-                              setPwTarget(u);
-                              setResetPwVal(randomTempPassword());
-                              setPwErr('');
+                            className="usr-btn usr-btn-secondary"
+                            onClick={resetFilters}
+                          >
+                            Reset filters
+                          </button>
+                        )}
+                        {assignableRoleNames.length > 0 && (
+                          <button
+                            type="button"
+                            className="usr-btn usr-btn-primary"
+                            onClick={openAdd}
+                          >
+                            Add user
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((u, idx) => {
+                  const manageable = canManageUser(me, u);
+                  const isSelf = u.empId === me.empId;
+                  const directActive = isDirectLoginActive(u);
+                  const needsActivation = u.empId !== 'developer' && !directActive;
+                  const openCount = openTasksByName[u.name] || 0;
+
+                  return (
+                    <tr
+                      key={u.docId}
+                      className={isSelf ? 'usr-row-self' : undefined}
+                    >
+                      <td className="usr-col-idx usr-num" data-label="#">
+                        {String(idx + 1).padStart(2, '0')}
+                      </td>
+
+                      <td data-label="User" className="m-card-head usr-col-user">
+                        <div className="usr-user-cell">
+                          <span
+                            className={`av usr-av${u.photoUrl ? ' ph' : ''}`}
+                            style={{
+                              backgroundImage: u.photoUrl ? `url("${u.photoUrl}")` : undefined,
                             }}
                           >
-                            Reset password
-                          </button>
-                          {!isSelf && (
-                            <>
-                              {' '}
+                            {u.name[0]}
+                          </span>
+                          <div className="usr-name-wrap">
+                            <span className="usr-name" title={u.name}>
+                              {u.name}
+                            </span>
+                            <span className="usr-mob-id">@{u.empId}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td data-label="User ID" className="usr-col-id usr-mono">
+                        @{u.empId}
+                      </td>
+
+                      <td data-label="Role" className="usr-col-role">
+                        <span className={getRoleRank(u.role) >= 3 ? 'usr-role-hi' : 'usr-role'}>
+                          {u.role}
+                        </span>
+                      </td>
+
+                      <td data-label="Branch" className="usr-col-branch">
+                        {u.branch || '—'}
+                      </td>
+
+                      <td data-label="Location" className="usr-col-loc">
+                        {u.location || '—'}
+                      </td>
+
+                      <td data-label="Joined" className="usr-col-join usr-num">
+                        {u.joinedAt || '—'}
+                      </td>
+
+                      <td data-label="Open tasks" className="usr-col-tasks usr-num">
+                        {openCount > 0 ? (
+                          <span className="usr-tasks-open">{openCount}</span>
+                        ) : (
+                          <span className="usr-muted">0</span>
+                        )}
+                      </td>
+
+                      <td data-label="Sign-in" className="usr-col-status">
+                        {needsActivation ? (
+                          <span className="usr-st usr-st-warn">Needs activation</span>
+                        ) : directActive ? (
+                          <span className="usr-st usr-st-ok">Active</span>
+                        ) : (
+                          <span className="usr-st usr-st-dev">System</span>
+                        )}
+                      </td>
+
+                      <td data-label="Actions" className="m-card-acts usr-col-acts">
+                        {manageable ? (
+                          <div className="usr-acts-wrap">
+                            <button
+                              className="usr-act-btn"
+                              type="button"
+                              onClick={() => openEdit(u)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className={
+                                needsActivation
+                                  ? 'usr-act-btn usr-act-primary'
+                                  : 'usr-act-btn'
+                              }
+                              type="button"
+                              onClick={() => {
+                                setPwTarget(u);
+                                setResetPwVal('');
+                                setPwErr('');
+                              }}
+                            >
+                              {needsActivation ? 'Activate login' : 'Reset password'}
+                            </button>
+                            {!isSelf && (
                               <button
-                                className="btn r"
+                                className="usr-act-btn usr-act-danger"
                                 type="button"
                                 onClick={() => {
                                   setDelTarget(u);
@@ -373,185 +729,402 @@ export const UsersView: React.FC<UsersViewProps> = ({
                               >
                                 Delete
                               </button>
-                            </>
-                          )}
-                        </>
-                      ) : (
-                        <span className="sub">
-                          {isSelf ? 'Your account' : 'Protected role'}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+                            )}
+                          </div>
+                        ) : (
+                          <span className="usr-locked">
+                            {isSelf ? 'Your account' : 'Protected role'}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
 
-        <div className="sub" style={{ marginTop: 10 }}>
-          {isDev
-            ? 'Developer has full, unrestricted access to manage all accounts and roles across the entire app.'
-            : `Strict role hierarchy: as ${me.role}, you can only create, edit, reset passwords for, or delete accounts strictly lower than your role. Your own account and same/upper roles cannot be modified.`}
+        <div className="usr-table-foot">
+          <span>
+            {isDev
+              ? 'Developer has full, unrestricted access to manage all accounts and roles across the entire app.'
+              : `Strict role hierarchy: as ${me.role}, you can only create, edit, reset passwords for, or delete accounts strictly lower than your role.`}
+          </span>
         </div>
-      </div>
+      </section>
 
       {/* Add User Modal */}
-      {showAdd && (
-        <div className="ov" onClick={(e) => e.target === e.currentTarget && setShowAdd(false)}>
-          <div className="md">
-            <h3>Add user</h3>
-            <label>User ID</label>
-            <input
-              placeholder="letters, numbers, dot"
-              value={addId}
-              onChange={(e) => setAddId(e.target.value)}
-            />
-            <label>Full name</label>
-            <input value={addName} onChange={(e) => setAddName(e.target.value)} />
-            <label>Temporary password</label>
-            <input value={addPw} onChange={(e) => setAddPw(e.target.value)} />
-            <label>Role</label>
-            <select value={addRole} onChange={(e) => setAddRole(e.target.value)}>
-              {assignableRoleNames.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-            <label>Branch</label>
-            <select value={addBranch} onChange={(e) => setAddBranch(e.target.value)}>
-              {['All', ...branches].map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
-            <label>Location</label>
-            <select value={addLoc} onChange={(e) => setAddLoc(e.target.value)}>
-              {['All', ...locations].map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </select>
-            {addErr && <div className="er">{addErr}</div>}
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
-              <button className="btn g" type="button" onClick={() => setShowAdd(false)}>
-                Cancel
-              </button>
-              <button className="btn" type="button" disabled={busy} onClick={handleAdd}>
-                Create user
-              </button>
+      {showAdd &&
+        createPortal(
+          <div
+            className="ov usr-ov"
+            onClick={(e) => e.target === e.currentTarget && setShowAdd(false)}
+          >
+            <div className="md usr-md">
+              <div className="usr-md-hd">
+                <div>
+                  <h3>Add user</h3>
+                  <p className="sub">Create a new employee account with direct User ID sign-in.</p>
+                </div>
+                <button
+                  type="button"
+                  className="usr-md-close"
+                  aria-label="Close modal"
+                  onClick={() => setShowAdd(false)}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="usr-mgrid">
+                <div className="usr-mf">
+                  <label htmlFor="add-uid">User ID</label>
+                  <input
+                    id="add-uid"
+                    placeholder="letters, numbers, dot"
+                    value={addId}
+                    onChange={(e) => setAddId(e.target.value)}
+                  />
+                </div>
+                <div className="usr-mf">
+                  <label htmlFor="add-name">Full name</label>
+                  <input
+                    id="add-name"
+                    placeholder="Employee full name"
+                    value={addName}
+                    onChange={(e) => setAddName(e.target.value)}
+                  />
+                </div>
+                <div className="usr-mf usr-mf-full">
+                  <label htmlFor="add-pw">Temporary password</label>
+                  <div className="usr-pw-row">
+                    <input
+                      id="add-pw"
+                      value={addPw}
+                      onChange={(e) => setAddPw(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="usr-btn usr-btn-secondary"
+                      onClick={() => setAddPw(randomTempPassword())}
+                    >
+                      Generate
+                    </button>
+                  </div>
+                </div>
+                <div className="usr-mf">
+                  <label htmlFor="add-role">Role</label>
+                  <select
+                    id="add-role"
+                    value={addRole}
+                    onChange={(e) => setAddRole(e.target.value)}
+                  >
+                    {assignableRoleNames.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="usr-mf">
+                  <label htmlFor="add-branch">Branch</label>
+                  <select
+                    id="add-branch"
+                    value={addBranch}
+                    onChange={(e) => setAddBranch(e.target.value)}
+                  >
+                    {['All', ...branches].map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="usr-mf usr-mf-full">
+                  <label htmlFor="add-loc">Location</label>
+                  <select
+                    id="add-loc"
+                    value={addLoc}
+                    onChange={(e) => setAddLoc(e.target.value)}
+                  >
+                    {['All', ...locations].map((l) => (
+                      <option key={l} value={l}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {addErr && <div className="er">{addErr}</div>}
+
+              <div className="usr-md-foot">
+                <button
+                  className="usr-btn usr-btn-secondary"
+                  type="button"
+                  onClick={() => setShowAdd(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="usr-btn usr-btn-primary"
+                  type="button"
+                  disabled={busy}
+                  onClick={handleAdd}
+                >
+                  {busy ? 'Creating...' : 'Create user'}
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
       {/* Edit User Modal */}
-      {editTarget && (
-        <div
-          className="ov"
-          onClick={(e) => e.target === e.currentTarget && setEditTarget(null)}
-        >
-          <div className="md">
-            <h3>Edit @{editTarget.empId}</h3>
-            <label>Full name</label>
-            <input value={editName} onChange={(e) => setEditName(e.target.value)} />
-            <label>Role</label>
-            <select value={editRole} onChange={(e) => setEditRole(e.target.value)}>
-              {assignableRoleNames.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-            <label>Branch</label>
-            <select value={editBranch} onChange={(e) => setEditBranch(e.target.value)}>
-              {['All', ...branches].map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
-            <label>Location</label>
-            <select value={editLoc} onChange={(e) => setEditLoc(e.target.value)}>
-              {['All', ...locations].map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </select>
-            {editErr && <div className="er">{editErr}</div>}
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
-              <button className="btn g" type="button" onClick={() => setEditTarget(null)}>
-                Cancel
-              </button>
-              <button className="btn" type="button" disabled={busy} onClick={handleEdit}>
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {editTarget &&
+        createPortal(
+          <div
+            className="ov usr-ov"
+            onClick={(e) => e.target === e.currentTarget && setEditTarget(null)}
+          >
+            <div className="md usr-md">
+              <div className="usr-md-hd">
+                <div>
+                  <h3>Edit @{editTarget.empId}</h3>
+                  <p className="sub">Update display name, role assignment, branch, or location.</p>
+                </div>
+                <button
+                  type="button"
+                  className="usr-md-close"
+                  aria-label="Close modal"
+                  onClick={() => setEditTarget(null)}
+                >
+                  ×
+                </button>
+              </div>
 
-      {/* Reset Password Modal */}
-      {pwTarget && (
-        <div className="ov" onClick={(e) => e.target === e.currentTarget && setPwTarget(null)}>
-          <div className="md">
-            <h3>Reset password for @{pwTarget.empId}</h3>
-            <label>New password</label>
-            <input value={resetPwVal} onChange={(e) => setResetPwVal(e.target.value)} />
-            <div className="sub" style={{ marginTop: 8 }}>
-              Share this with the user. They can change it from My profile.
+              <div className="usr-mgrid">
+                <div className="usr-mf usr-mf-full">
+                  <label htmlFor="edit-name">Full name</label>
+                  <input
+                    id="edit-name"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                  />
+                </div>
+                <div className="usr-mf">
+                  <label htmlFor="edit-role">Role</label>
+                  <select
+                    id="edit-role"
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value)}
+                  >
+                    {assignableRoleNames.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="usr-mf">
+                  <label htmlFor="edit-branch">Branch</label>
+                  <select
+                    id="edit-branch"
+                    value={editBranch}
+                    onChange={(e) => setEditBranch(e.target.value)}
+                  >
+                    {['All', ...branches].map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="usr-mf usr-mf-full">
+                  <label htmlFor="edit-loc">Location</label>
+                  <select
+                    id="edit-loc"
+                    value={editLoc}
+                    onChange={(e) => setEditLoc(e.target.value)}
+                  >
+                    {['All', ...locations].map((l) => (
+                      <option key={l} value={l}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {editErr && <div className="er">{editErr}</div>}
+
+              <div className="usr-md-foot">
+                <button
+                  className="usr-btn usr-btn-secondary"
+                  type="button"
+                  onClick={() => setEditTarget(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="usr-btn usr-btn-primary"
+                  type="button"
+                  disabled={busy}
+                  onClick={handleEdit}
+                >
+                  {busy ? 'Saving...' : 'Save changes'}
+                </button>
+              </div>
             </div>
-            {pwErr && <div className="er">{pwErr}</div>}
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
-              <button className="btn g" type="button" onClick={() => setPwTarget(null)}>
-                Cancel
-              </button>
-              <button className="btn" type="button" disabled={busy} onClick={handleResetPw}>
-                Reset
-              </button>
+          </div>,
+          document.body
+        )}
+
+      {/* Reset / Activate Password Modal */}
+      {pwTarget &&
+        createPortal(
+          <div
+            className="ov usr-ov"
+            onClick={(e) => e.target === e.currentTarget && setPwTarget(null)}
+          >
+            <div className="md usr-md">
+              <div className="usr-md-hd">
+                <div>
+                  <h3>
+                    {!isDirectLoginActive(pwTarget) && pwTarget.empId !== 'developer'
+                      ? `Activate login for @${pwTarget.empId}`
+                      : `Reset password for @${pwTarget.empId}`}
+                  </h3>
+                  <p className="sub">
+                    {!isDirectLoginActive(pwTarget) && pwTarget.empId !== 'developer'
+                      ? 'Registers this account for direct User ID + Password sign-in.'
+                      : 'Share the new password with the user. They can change it in My profile.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="usr-md-close"
+                  aria-label="Close modal"
+                  onClick={() => setPwTarget(null)}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="usr-mf">
+                <label htmlFor="reset-pw-in">
+                  {!isDirectLoginActive(pwTarget) && pwTarget.empId !== 'developer'
+                    ? 'Password (you can reuse their existing password)'
+                    : 'New password'}
+                </label>
+                <div className="usr-pw-row">
+                  <input
+                    id="reset-pw-in"
+                    placeholder="Type password (min 6 characters)"
+                    value={resetPwVal}
+                    onChange={(e) => setResetPwVal(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                  <button
+                    className="usr-btn usr-btn-secondary"
+                    type="button"
+                    onClick={() => setResetPwVal(randomTempPassword())}
+                  >
+                    Generate
+                  </button>
+                </div>
+              </div>
+
+              {pwErr && <div className="er">{pwErr}</div>}
+
+              <div className="usr-md-foot">
+                <button
+                  className="usr-btn usr-btn-secondary"
+                  type="button"
+                  onClick={() => setPwTarget(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="usr-btn usr-btn-primary"
+                  type="button"
+                  disabled={busy}
+                  onClick={handleResetPw}
+                >
+                  {busy
+                    ? 'Saving...'
+                    : !isDirectLoginActive(pwTarget) && pwTarget.empId !== 'developer'
+                      ? 'Activate login'
+                      : 'Reset password'}
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
       {/* Delete User Modal */}
-      {delTarget && (
-        <div
-          className="ov"
-          onClick={(e) => e.target === e.currentTarget && setDelTarget(null)}
-        >
-          <div className="md">
-            <h3>Delete user</h3>
-            <p>
-              Delete <b>{delTarget.name}</b> (@{delTarget.empId})? They will no longer be able
-              to sign in.
-              {delOpenTasks > 0 && (
-                <>
-                  {' '}
-                  <b style={{ color: 'var(--red)' }}>
-                    {delOpenTasks} open task(s) are waiting on this user.
-                  </b>
-                </>
-              )}{' '}
-              Past scores stay in the history.
-            </p>
-            {delErr && <div className="er">{delErr}</div>}
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
-              <button className="btn g" type="button" onClick={() => setDelTarget(null)}>
-                Cancel
-              </button>
-              <button className="btn r" type="button" disabled={busy} onClick={handleDelete}>
-                Delete
-              </button>
+      {delTarget &&
+        createPortal(
+          <div
+            className="ov usr-ov"
+            onClick={(e) => e.target === e.currentTarget && setDelTarget(null)}
+          >
+            <div className="md usr-md">
+              <div className="usr-md-hd">
+                <div>
+                  <h3>Delete user</h3>
+                  <p className="sub">This disables sign-in access for @{delTarget.empId}.</p>
+                </div>
+                <button
+                  type="button"
+                  className="usr-md-close"
+                  aria-label="Close modal"
+                  onClick={() => setDelTarget(null)}
+                >
+                  ×
+                </button>
+              </div>
+
+              <p className="usr-del-copy">
+                Delete <b>{delTarget.name}</b> (@{delTarget.empId})? They will no longer be able to
+                sign in.
+                {delOpenTasks > 0 && (
+                  <>
+                    {' '}
+                    <b className="usr-del-warn">
+                      {delOpenTasks} open task{delOpenTasks === 1 ? ' is' : 's are'} waiting on this
+                      user.
+                    </b>
+                  </>
+                )}{' '}
+                Past scores stay in the history.
+              </p>
+
+              {delErr && <div className="er">{delErr}</div>}
+
+              <div className="usr-md-foot">
+                <button
+                  className="usr-btn usr-btn-secondary"
+                  type="button"
+                  onClick={() => setDelTarget(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="usr-btn usr-btn-danger"
+                  type="button"
+                  disabled={busy}
+                  onClick={handleDelete}
+                >
+                  {busy ? 'Deleting...' : 'Delete user'}
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
-

@@ -79,7 +79,7 @@ export const KpiView: React.FC<KpiViewProps> = ({ me, canSeeAll, scoreEvents }) 
           Points per completed stage: Low = 1 · Medium = 3 · High = 5 (×1.5 bonus if on time)
         </div>
 
-        <div className="tbl">
+        <div className="tbl m-card-tbl">
           <table id="kt">
             <thead>
               <tr>
@@ -97,12 +97,12 @@ export const KpiView: React.FC<KpiViewProps> = ({ me, canSeeAll, scoreEvents }) 
               ) : (
                 rankings.map(([name, pts], idx) => (
                   <tr key={name}>
-                    <td>{idx + 1}</td>
-                    <td>
+                    <td data-label="Rank">#{idx + 1}</td>
+                    <td data-label="Employee">
                       <b>{name}</b>
                     </td>
-                    <td>{pts}</td>
-                    <td>
+                    <td data-label="Score">{pts}</td>
+                    <td data-label="Progress">
                       <div className="bar">
                         <i style={{ width: `${Math.max(0, (pts / maxPts) * 100)}%` }} />
                       </div>

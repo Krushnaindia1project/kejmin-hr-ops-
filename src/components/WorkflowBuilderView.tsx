@@ -15,7 +15,8 @@ interface WorkflowBuilderViewProps {
   locations: string[];
   holidays: Holiday[];
   paths: WorkflowPath[];
-  isAdmin: boolean;
+  canCreateTasks: boolean;
+  canDesignPaths: boolean;
   onCreateTask: (params: {
     title: string;
     branch: string;
@@ -36,7 +37,8 @@ export const WorkflowBuilderView: React.FC<WorkflowBuilderViewProps> = ({
   locations,
   holidays,
   paths,
-  isAdmin,
+  canCreateTasks,
+  canDesignPaths,
   onCreateTask,
   onSaveTemplate,
 }) => {
@@ -90,6 +92,10 @@ export const WorkflowBuilderView: React.FC<WorkflowBuilderViewProps> = ({
   };
 
   const handleSubmit = async () => {
+    if (!canCreateTasks) {
+      setErr('Your role does not have permission to create tasks.');
+      return;
+    }
     setErr('');
     const cleanStages = stages.filter(Boolean);
     if (!title.trim() || !cleanStages.length) {
@@ -129,6 +135,10 @@ export const WorkflowBuilderView: React.FC<WorkflowBuilderViewProps> = ({
   };
 
   const handleSaveTemplate = async () => {
+    if (!canDesignPaths) {
+      setErr('Your role does not have permission to design workflow paths.');
+      return;
+    }
     const cleanStages = stages.filter(Boolean);
     if (!tplName.trim() || !cleanStages.length) {
       setErr('Enter a template name and select at least one stage.');
@@ -144,10 +154,27 @@ export const WorkflowBuilderView: React.FC<WorkflowBuilderViewProps> = ({
     }
   };
 
+  if (!canCreateTasks && !canDesignPaths) {
+    return (
+      <div className="view on" id="v-flow">
+        <div className="glass sec" style={{ marginTop: 0 }}>
+          <h3>Workflow builder</h3>
+          <div className="sub">
+            Your current role does not have permission to create tasks or design workflow paths.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="view on" id="v-flow">
       <div className="glass sec" style={{ marginTop: 0 }}>
-        <h3>Create task &amp; process path</h3>
+        <h3>
+          {canCreateTasks ? 'Create task & process path' : 'Design workflow path templates'}
+        </h3>
+        {canCreateTasks && (
+          <>
         <div className="row">
           <div>
             <label htmlFor="ft">Title</label>
@@ -264,6 +291,8 @@ export const WorkflowBuilderView: React.FC<WorkflowBuilderViewProps> = ({
             </div>
           </div>
         )}
+          </>
+        )}
 
         <label htmlFor="tp">Start from a template</label>
         <select
@@ -318,7 +347,7 @@ export const WorkflowBuilderView: React.FC<WorkflowBuilderViewProps> = ({
           >
             + Add stage
           </button>
-          {isAdmin && (
+          {canDesignPaths && canCreateTasks && (
             <button
               className="btn g"
               type="button"
@@ -327,18 +356,20 @@ export const WorkflowBuilderView: React.FC<WorkflowBuilderViewProps> = ({
               Save path as template
             </button>
           )}
-          <button
-            className="btn o"
-            id="ct"
-            type="button"
-            disabled={busy}
-            onClick={handleSubmit}
-          >
-            {busy ? 'Creating...' : 'Create task'}
-          </button>
+          {canCreateTasks && (
+            <button
+              className="btn o"
+              id="ct"
+              type="button"
+              disabled={busy}
+              onClick={handleSubmit}
+            >
+              {busy ? 'Creating...' : 'Create task'}
+            </button>
+          )}
         </div>
 
-        {showSaveTpl && isAdmin && (
+        {canDesignPaths && (!canCreateTasks || showSaveTpl) && (
           <div className="row" style={{ marginTop: 12 }}>
             <div>
               <label>Template name</label>

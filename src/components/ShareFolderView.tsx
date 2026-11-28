@@ -17,6 +17,7 @@ import {
   getInAppPreviewKind,
   InAppPreviewKind,
   inferMimeTypeFromFileName,
+  reconnectPermanentCompanyDriveOnServer,
   renameCompanyDriveItem,
   replaceCompanyDriveFileContent,
   uploadFileToCompanyDrive,
@@ -132,6 +133,20 @@ function formatDateFromTs(ts?: { toDate: () => Date }): string {
   }
 }
 
+function formatDateTimeFromTs(ts?: { toDate: () => Date }): string {
+  if (!ts) return 'Just now';
+  try {
+    const d = ts.toDate();
+    const datePart = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate()
+    ).padStart(2, '0')}`;
+    const timePart = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${datePart} · ${timePart}`;
+  } catch {
+    return '-';
+  }
+}
+
 export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
   me,
   firebaseUid,
@@ -157,12 +172,14 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
   const [driveError, setDriveError] = useState<string | null>(null);
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
 
-  const refreshDriveStatus = useCallback(async () => {
+  const refreshDriveStatus = useCallback(async (): Promise<CompanyDriveStatus | null> => {
     try {
       const status = await fetchCompanyDriveStatus();
       setDriveStatus(status);
+      return status;
     } catch {
       // keep previous status if offline temporarily
+      return null;
     }
   }, []);
 
@@ -269,8 +286,9 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
 
-  // Disconnect confirmation modal for Admin
+  // Disconnect confirmation modal & Permanent Setup guide modal for Developer
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [showPermanentSetup, setShowPermanentSetup] = useState(false);
 
   // Clean up any active object URL only on unmount (avoids premature revocation during renders)
   useEffect(() => {
@@ -438,10 +456,12 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
       accessFilter !== 'all'
   );
 
+  const isShowingRecentRoot = !currentFolderId && !hasGlobalFilter;
+
   const displayedFiles = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const list = visibleFiles.filter((f) => {
-      if (!hasGlobalFilter && f.folderId !== currentFolderId) return false;
+      if (!hasGlobalFilter && currentFolderId && f.folderId !== currentFolderId) return false;
       if (hasGlobalFilter && currentFolderId && f.folderId !== currentFolderId && !q) return false;
       if (
         q &&
@@ -466,7 +486,10 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
     return list.sort((a, b) => {
       if (sortBy === 'name') return a.name.localeCompare(b.name);
       if (sortBy === 'size') return (b.sizeBytes || 0) - (a.sizeBytes || 0);
-      return (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0);
+      return (
+        (b.updatedAt?.toMillis() || b.createdAt?.toMillis() || 0) -
+        (a.updatedAt?.toMillis() || a.createdAt?.toMillis() || 0)
+      );
     });
   }, [
     visibleFiles,
@@ -491,15 +514,26 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
   );
 
   // Developer connects the SINGLE shared Company Google Drive for the entire organization
-  const handleConnectCompanyDrive = async (): Promise<boolean> => {
+  const handleConnectCompanyDrive = async (forceInteractivePopup = false): Promise<boolean> => {
     setConnectingDrive(true);
     setDriveError(null);
     try {
+      if (!forceInteractivePopup && driveStatus.permanentConfigured) {
+        const updatedStatus = await reconnectPermanentCompanyDriveOnServer();
+        setDriveStatus(updatedStatus);
+        window.dispatchEvent(new Event('kejmin-drive-status-updated'));
+        onToast('Permanent Company Google Drive connected for all team members');
+        return true;
+      }
       const { accessToken } = await connectGoogleDrive(driveStatus.hintEmail);
       const updatedStatus = await connectCompanyDriveOnServer(accessToken, me.name);
       setDriveStatus(updatedStatus);
       window.dispatchEvent(new Event('kejmin-drive-status-updated'));
-      onToast('Company Google Drive connected for all team members');
+      onToast(
+        updatedStatus.permanent
+          ? 'Permanent Company Google Drive connected for all team members'
+          : 'Company Google Drive connected (temporary 1-hour browser session)'
+      );
       return true;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1386,15 +1420,82 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
                   Company Drive
                 </button>
 
-                {!driveStatus.connected && renderGoogleConnectButton('Connect Company Drive')}
+                {!driveStatus.connected && (
+                  <>
+                    {driveStatus.permanentConfigured ? (
+                      <>
+                        <button
+                          type="button"
+                          className="sh-btn sh-btn-primary"
+                          disabled={connectingDrive}
+                          onClick={() => void handleConnectCompanyDrive(false)}
+                          title="Reconnect the permanent Company Google Drive"
+                        >
+                          {connectingDrive ? 'Connecting...' : 'Reconnect Company Drive'}
+                        </button>
+                        {(driveStatus.configWarning || driveError) && (
+                          <button
+                            type="button"
+                            className="sh-btn sh-btn-secondary"
+                            disabled={connectingDrive}
+                            onClick={() => void handleConnectCompanyDrive(true)}
+                            title="Connect temporarily using your Google account while fixing permanent secrets"
+                          >
+                            Connect with Google
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="sh-btn sh-btn-secondary"
+                          onClick={() => setShowPermanentSetup(true)}
+                          title="View permanent Company Drive setup status and instructions"
+                        >
+                          Permanent Setup
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {renderGoogleConnectButton('Connect Company Drive')}
+                        <button
+                          type="button"
+                          className="sh-btn sh-btn-secondary"
+                          onClick={() => setShowPermanentSetup(true)}
+                          title="Configure permanent 24/7 Google Drive access so it never disconnects"
+                        >
+                          Permanent Setup
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+
+                {driveStatus.connected && driveStatus.permanent && (
+                  <button
+                    type="button"
+                    className="sh-btn sh-btn-secondary"
+                    disabled={connectingDrive}
+                    onClick={() => setShowDisconnectConfirm(true)}
+                    title="Company Drive stays connected permanently until you click Disconnect"
+                  >
+                    Disconnect
+                  </button>
+                )}
 
                 {driveStatus.connected && !driveStatus.permanent && (
                   <>
                     <button
                       type="button"
                       className="sh-btn sh-btn-secondary"
+                      onClick={() => setShowPermanentSetup(true)}
+                      title="Browser sign-in sessions expire after 1 hour. View permanent server setup steps."
+                    >
+                      Make Permanent
+                    </button>
+                    <button
+                      type="button"
+                      className="sh-btn sh-btn-secondary"
                       disabled={connectingDrive}
-                      onClick={() => void handleConnectCompanyDrive()}
+                      onClick={() => void handleConnectCompanyDrive(true)}
                       title="Refresh or switch the shared Company Drive account"
                     >
                       {connectingDrive ? 'Connecting...' : 'Switch / Refresh Drive'}
@@ -1441,11 +1542,47 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
           </div>
         </div>
 
-        {driveError && (
-          <div style={{ padding: '0 14px 10px' }}>
-            <div className="er" style={{ marginTop: 0 }}>
-              {driveError}
-            </div>
+        {(driveError || (isDeveloper && !driveStatus.connected && driveStatus.configWarning)) && (
+          <div style={{ padding: '0 14px 10px', display: 'grid', gap: 6 }}>
+            {driveError && (
+              <div
+                className="er"
+                style={{
+                  marginTop: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                }}
+              >
+                <span>{driveError}</span>
+                <button
+                  type="button"
+                  onClick={() => setDriveError(null)}
+                  aria-label="Dismiss error"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'inherit',
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                    fontSize: 15,
+                    lineHeight: 1,
+                    padding: '2px 4px',
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            {isDeveloper &&
+              !driveStatus.connected &&
+              driveStatus.configWarning &&
+              driveStatus.configWarning !== driveError && (
+                <div className="er" style={{ marginTop: 0 }}>
+                  {driveStatus.configWarning}
+                </div>
+              )}
           </div>
         )}
 
@@ -1564,10 +1701,14 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
           <div className="sub">Uploaded by me</div>
           <div className="big o">{myUploadsCount}</div>
           <div className="sh-kpi-sub">
-            {driveStatus.connected
-              ? 'View, edit, upload & delete directly here'
+            {driveStatus.connected && driveStatus.permanent
+              ? 'Permanent Company Drive active'
+              : driveStatus.connected
+              ? 'Session connected (expires in ~1 hr unless made permanent)'
+              : isDeveloper && driveStatus.permanentConfigured
+              ? 'Disconnected by admin — click Reconnect to resume'
               : isDeveloper
-              ? 'Connect Company Drive once for all users'
+              ? 'Configure Permanent Setup so Drive never disconnects'
               : 'Company Drive storage'}
           </div>
         </div>
@@ -1750,9 +1891,19 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
 
         {/* Files Table */}
         <div className="sh-section-lbl" style={{ marginTop: displayedFolders.length ? 18 : 4 }}>
-          Files ({displayedFiles.length})
+          {isShowingRecentRoot
+            ? `Recent File Uploads (${displayedFiles.length})`
+            : `Files (${displayedFiles.length})`}
           <span style={{ fontWeight: 400, marginLeft: 8, color: 'var(--mut)' }}>
-            {!canUploadHere
+            {isShowingRecentRoot
+              ? driveStatus.connected
+                ? canUploadHere
+                  ? 'Click any file to view, edit, or download · Drag & drop files here to upload'
+                  : 'Click any file to view, edit, or download · Open a folder above to upload new files'
+                : isDeveloper
+                ? 'Connect Company Drive once above so all staff can preview, upload, and modify files here'
+                : 'Click any file to view, edit, or download · Open a folder above to upload new files'
+              : !canUploadHere
               ? 'Open a folder above to upload files'
               : driveStatus.connected
               ? 'Click any file to preview or edit · Drag & drop files here to upload'
@@ -1767,6 +1918,8 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
             <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--tx)' }}>
               {hasGlobalFilter
                 ? 'No shared files match your current filters.'
+                : isShowingRecentRoot
+                ? 'No recent file uploads yet.'
                 : !canUploadHere
                 ? 'Open a folder to upload files.'
                 : 'No files in this folder yet.'}
@@ -1810,7 +1963,7 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
             </div>
           </div>
         ) : (
-          <div className="tbl">
+          <div className="tbl m-card-tbl sh-files-tbl">
             <table>
               <thead>
                 <tr>
@@ -1839,10 +1992,10 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
 
                   return (
                     <tr key={file.fileId}>
-                      <td>
+                      <td data-label="File" className="m-card-head">
                         <div className="sh-file-cell">
                           <span className={`sh-ext ${kind.tone}`}>{kind.label}</span>
-                          <div style={{ minWidth: 0 }}>
+                          <div style={{ minWidth: 0, flex: 1 }}>
                             <button
                               type="button"
                               className="sh-file-name"
@@ -1852,10 +2005,11 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
                               {file.name}
                             </button>
                             <div className="sh-file-meta">
-                              {parentFld && hasGlobalFilter && (
+                              {parentFld && (hasGlobalFilter || !currentFolderId) && (
                                 <button
                                   type="button"
                                   className="sh-inline-fld"
+                                  title={`Open folder: ${getFolderPathLabel(parentFld.folderId)}`}
                                   onClick={() => {
                                     setCurrentFolderId(parentFld.folderId);
                                     clearFilters();
@@ -1864,30 +2018,35 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
                                   {parentFld.name}
                                 </button>
                               )}
+                              {!parentFld && !currentFolderId && (
+                                <span className="sh-inline-fld" style={{ cursor: 'default' }}>
+                                  Company Drive
+                                </span>
+                              )}
                               {file.description && <span>{file.description}</span>}
                             </div>
                           </div>
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Category">
                         <span className="sh-cat-badge">{file.category}</span>
                       </td>
-                      <td>
+                      <td data-label="Scope">
                         <div style={{ fontSize: 12.5, fontWeight: 600 }}>{scopeDetail}</div>
                         <div className="sub" style={{ fontSize: 11.5 }}>
                           {file.branch} · {file.location}
                         </div>
                       </td>
-                      <td style={{ whiteSpace: 'nowrap', fontSize: 13 }}>
+                      <td data-label="Size" style={{ whiteSpace: 'nowrap', fontSize: 13 }}>
                         {formatFileSize(file.sizeBytes)}
                       </td>
-                      <td style={{ whiteSpace: 'nowrap' }}>
+                      <td data-label="Uploaded" style={{ whiteSpace: 'nowrap' }}>
                         <div style={{ fontSize: 13, fontWeight: 600 }}>{file.uploadedBy}</div>
                         <div className="sub" style={{ fontSize: 11.5 }}>
-                          {formatDateFromTs(file.createdAt)}
+                          {formatDateTimeFromTs(file.updatedAt || file.createdAt)}
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Actions" className="m-card-acts">
                         <div className="sh-row-acts">
                           <button
                             type="button"
@@ -3019,6 +3178,187 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
         </div>
       )}
 
+      {/* ===== PERMANENT COMPANY DRIVE SETUP MODAL (DEVELOPER ONLY, READ-ONLY GUIDE) ===== */}
+      {isDeveloper && showPermanentSetup && (
+        <div
+          className="ov"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !connectingDrive) {
+              setShowPermanentSetup(false);
+            }
+          }}
+        >
+          <div className="md" style={{ maxWidth: 620 }}>
+            <h3 style={{ marginTop: 0 }}>Keep Company Google Drive Connected Permanently</h3>
+            <p style={{ marginTop: 6, marginBottom: 12, fontSize: 13, color: 'var(--mut)', lineHeight: 1.5 }}>
+              Google&apos;s browser sign-in popup only issues a <strong>1-hour access token</strong>{' '}
+              (and never a refresh token), so popup connections expire automatically after ~60 minutes
+              or when the server restarts. To stay connected 24/7 until you manually click{' '}
+              <strong>Disconnect</strong>, add permanent credentials once in{' '}
+              <strong>Settings → Secrets</strong> on the server:
+            </p>
+
+            <div
+              style={{
+                border: '1px solid var(--ln)',
+                borderRadius: 10,
+                padding: '12px 14px',
+                background: 'var(--bg-soft, rgba(15,23,42,0.03))',
+                marginBottom: 12,
+              }}
+            >
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
+                Recommended: Google OAuth Refresh Token (Works with Personal Gmail &amp; Workspace Drive)
+              </div>
+              <ol style={{ margin: '0 0 10px 18px', padding: 0, fontSize: 12.5, lineHeight: 1.6 }}>
+                <li>
+                  In Google Cloud Console → <strong>APIs &amp; Services → Credentials</strong>, create a
+                  Web OAuth Client ID and add{' '}
+                  <code>https://developers.google.com/oauthplayground</code> as an Authorized Redirect URI.
+                </li>
+                <li>
+                  Open <strong>Google OAuth 2.0 Playground</strong>, click the gear icon → check{' '}
+                  <em>Use your own OAuth credentials</em>, enter your Client ID &amp; Secret, authorize{' '}
+                  <code>https://www.googleapis.com/auth/drive.file</code>, and exchange for a{' '}
+                  <strong>Refresh Token</strong>.
+                </li>
+                <li>
+                  In AI Studio <strong>Settings → Secrets</strong>, add these three secrets (plus
+                  optional folder ID):
+                </li>
+              </ol>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr auto',
+                  gap: '6px 12px',
+                  fontSize: 12,
+                  alignItems: 'center',
+                }}
+              >
+                <code>GOOGLE_DRIVE_CLIENT_ID</code>
+                <span
+                  style={{
+                    fontWeight: 600,
+                    color: driveStatus.envChecklist?.hasClientId ? 'var(--grn, #15803d)' : 'var(--mut)',
+                  }}
+                >
+                  {driveStatus.envChecklist?.hasClientId ? 'Configured' : 'Not set'}
+                </span>
+
+                <code>GOOGLE_DRIVE_CLIENT_SECRET</code>
+                <span
+                  style={{
+                    fontWeight: 600,
+                    color: driveStatus.envChecklist?.hasClientSecret ? 'var(--grn, #15803d)' : 'var(--mut)',
+                  }}
+                >
+                  {driveStatus.envChecklist?.hasClientSecret ? 'Configured' : 'Not set'}
+                </span>
+
+                <code>GOOGLE_DRIVE_REFRESH_TOKEN</code>
+                <span
+                  style={{
+                    fontWeight: 600,
+                    color: driveStatus.envChecklist?.hasRefreshToken ? 'var(--grn, #15803d)' : 'var(--mut)',
+                  }}
+                >
+                  {driveStatus.envChecklist?.hasRefreshToken ? 'Configured' : 'Not set'}
+                </span>
+
+                <code>GOOGLE_DRIVE_SHARED_FOLDER_ID (optional)</code>
+                <span
+                  style={{
+                    fontWeight: 600,
+                    color: driveStatus.envChecklist?.hasSharedFolderId ? 'var(--grn, #15803d)' : 'var(--mut)',
+                  }}
+                >
+                  {driveStatus.envChecklist?.hasSharedFolderId ? 'Configured' : 'Auto-detect'}
+                </span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                border: '1px solid var(--ln)',
+                borderRadius: 10,
+                padding: '10px 14px',
+                fontSize: 12.5,
+                marginBottom: 12,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <strong>Alternative (Google Workspace Shared Drives only):</strong>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: driveStatus.envChecklist?.hasServiceAccount ? 'var(--grn, #15803d)' : 'var(--mut)',
+                  }}
+                >
+                  {driveStatus.envChecklist?.hasServiceAccount ? 'Service Account Configured' : 'Not set'}
+                </span>
+              </div>
+              <div style={{ marginTop: 4, color: 'var(--mut)' }}>
+                Set <code>GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON</code> and <code>GOOGLE_DRIVE_SHARED_FOLDER_ID</code>{' '}
+                (share the Workspace Shared Drive folder with the service account email as Content Manager).
+              </div>
+            </div>
+
+            {driveStatus.configWarning && (
+              <div className="er" style={{ marginTop: 0, marginBottom: 12 }}>
+                {driveStatus.configWarning}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+              <button
+                type="button"
+                className="btn g"
+                onClick={() => setShowPermanentSetup(false)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="btn p"
+                disabled={connectingDrive}
+                onClick={async () => {
+                  const latest = await refreshDriveStatus();
+                  if (latest?.permanentConfigured) {
+                    if (latest.connected && latest.permanent) {
+                      setShowPermanentSetup(false);
+                      onToast('Permanent Company Google Drive is already active');
+                      return;
+                    }
+                    setConnectingDrive(true);
+                    setDriveError(null);
+                    try {
+                      const updated = await reconnectPermanentCompanyDriveOnServer();
+                      setDriveStatus(updated);
+                      window.dispatchEvent(new Event('kejmin-drive-status-updated'));
+                      setShowPermanentSetup(false);
+                      onToast('Permanent Company Google Drive connected for all team members');
+                    } catch (err: unknown) {
+                      setDriveError(
+                        err instanceof Error ? err.message : 'Could not activate permanent Drive.'
+                      );
+                    } finally {
+                      setConnectingDrive(false);
+                    }
+                  } else {
+                    onToast('Checked server secrets — add the secrets in Settings → Secrets and restart.');
+                  }
+                }}
+              >
+                {connectingDrive ? 'Checking...' : 'Verify Server Secrets'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ===== DISCONNECT COMPANY DRIVE CONFIRMATION MODAL (DEVELOPER ONLY) ===== */}
       {isDeveloper && showDisconnectConfirm && (
         <div
@@ -3033,7 +3373,7 @@ export const ShareFolderView: React.FC<ShareFolderViewProps> = ({
             <h3 style={{ marginTop: 0 }}>Disconnect Company Drive?</h3>
             <p style={{ marginTop: 8, marginBottom: 12 }}>
               Disconnecting will pause file previews, uploads, and downloads for all team members
-              until an Administrator reconnects Company Drive.
+              until you click Reconnect Company Drive.
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               <button

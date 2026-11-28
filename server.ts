@@ -178,11 +178,96 @@ interface PersistedDriveState {
 
 const DRIVE_STATE_DIR = path.resolve(__dirname, '.data');
 const DRIVE_STATE_FILE = path.join(DRIVE_STATE_DIR, 'company-drive-session.enc');
+const LOGIN_VERSIONS_FILE = path.join(DRIVE_STATE_DIR, 'login-versions.enc');
 const DRIVE_STATE_KEY = crypto.scryptSync(
   `${FIREBASE_PROJECT_ID}:${FIREBASE_API_KEY}:${FIRESTORE_DATABASE_ID}`,
   'kejmin-company-drive-v1',
   32
 );
+
+const SAFE_EMP_ID_RE = /^[a-z0-9._]{3,20}$/;
+
+function toSafeDocId(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/\./g, '__')
+    .replace(/[^a-z0-9_-]/g, '_')
+    .slice(0, 120);
+}
+
+// Tracks latest active loginVersion per employee docId (persisted encrypted on disk & synced by Admins)
+const loginVersions = new Map<string, number>();
+
+// Lightweight IP rate limiter for /api/auth/login-slot (60 requests per 60s per IP)
+const loginSlotRateLimit = new Map<string, { count: number; resetAt: number }>();
+
+function checkLoginSlotRateLimit(ip: string): boolean {
+  const now = Date.now();
+  if (loginSlotRateLimit.size > 2000) {
+    for (const [k, v] of loginSlotRateLimit.entries()) {
+      if (v.resetAt <= now) loginSlotRateLimit.delete(k);
+    }
+  }
+  const entry = loginSlotRateLimit.get(ip);
+  if (!entry || entry.resetAt <= now) {
+    loginSlotRateLimit.set(ip, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (entry.count >= 60) return false;
+  entry.count += 1;
+  return true;
+}
+
+function saveLoginVersions(): void {
+  try {
+    fs.mkdirSync(DRIVE_STATE_DIR, { recursive: true, mode: 0o700 });
+    const obj: Record<string, number> = {};
+    for (const [k, v] of loginVersions.entries()) {
+      obj[k] = v;
+    }
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', DRIVE_STATE_KEY, iv);
+    const plaintext = Buffer.from(JSON.stringify(obj), 'utf8');
+    const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    fs.writeFileSync(LOGIN_VERSIONS_FILE, Buffer.concat([iv, tag, encrypted]), { mode: 0o600 });
+  } catch {
+    // Non-fatal if filesystem is read-only
+  }
+}
+
+function loadLoginVersions(): void {
+  try {
+    if (!fs.existsSync(LOGIN_VERSIONS_FILE)) return;
+    const raw = fs.readFileSync(LOGIN_VERSIONS_FILE);
+    if (raw.length < 29) return;
+    const iv = raw.subarray(0, 12);
+    const tag = raw.subarray(12, 28);
+    const encrypted = raw.subarray(28);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', DRIVE_STATE_KEY, iv);
+    decipher.setAuthTag(tag);
+    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+    const parsed = JSON.parse(decrypted) as Record<string, unknown>;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      for (const [docId, version] of Object.entries(parsed)) {
+        if (
+          SAFE_DOC_ID_RE.test(docId) &&
+          typeof version === 'number' &&
+          Number.isInteger(version) &&
+          version >= 1 &&
+          version <= 9999
+        ) {
+          loginVersions.set(docId, version);
+        }
+      }
+    }
+  } catch {
+    // Ignore corrupt state file
+  }
+}
+
+loadLoginVersions();
 
 // Shared company Google Drive state (encrypted on server disk so it survives server restarts; never sent to browsers)
 let companyDriveSession: CompanyDriveSession | null = null;
@@ -311,11 +396,46 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseU
   }
 }
 
+async function checkIsBoundEmployee(user: VerifiedFirebaseUser, idToken: string): Promise<boolean> {
+  if (!SAFE_DOC_ID_RE.test(user.uid)) return false;
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(
+      FIREBASE_PROJECT_ID
+    )}/databases/${encodeURIComponent(
+      FIRESTORE_DATABASE_ID
+    )}/documents/authBindings/${encodeURIComponent(user.uid)}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    if (!res.ok) return false;
+    const docData = (await res.json()) as {
+      fields?: {
+        active?: { booleanValue?: boolean };
+        orgId?: { stringValue?: string };
+      };
+    };
+    return (
+      docData.fields?.active?.booleanValue === true &&
+      docData.fields?.orgId?.stringValue === 'kejmin'
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function checkIsVerifiedOrBound(user: VerifiedFirebaseUser, idToken: string): Promise<boolean> {
+  if (user.emailVerified) return true;
+  return checkIsBoundEmployee(user, idToken);
+}
+
 async function checkIsAdmin(user: VerifiedFirebaseUser, idToken: string): Promise<boolean> {
-  if (!user.emailVerified) return false;
-  if (user.email.toLowerCase() === BOOTSTRAP_ADMIN_EMAIL.toLowerCase()) {
+  if (
+    user.emailVerified &&
+    user.email.toLowerCase() === BOOTSTRAP_ADMIN_EMAIL.toLowerCase()
+  ) {
     return true;
   }
+  if (!(await checkIsVerifiedOrBound(user, idToken))) return false;
   if (!SAFE_DOC_ID_RE.test(user.uid)) return false;
 
   try {
@@ -334,10 +454,13 @@ async function checkIsAdmin(user: VerifiedFirebaseUser, idToken: string): Promis
 }
 
 async function checkIsDeveloper(user: VerifiedFirebaseUser, idToken: string): Promise<boolean> {
-  if (!user.emailVerified) return false;
-  if (user.email.toLowerCase() === BOOTSTRAP_ADMIN_EMAIL.toLowerCase()) {
+  if (
+    user.emailVerified &&
+    user.email.toLowerCase() === BOOTSTRAP_ADMIN_EMAIL.toLowerCase()
+  ) {
     return true;
   }
+  if (!(await checkIsVerifiedOrBound(user, idToken))) return false;
   if (!SAFE_DOC_ID_RE.test(user.uid)) return false;
 
   try {
@@ -472,8 +595,9 @@ async function requireVerifiedUser(
     res.status(401).json({ error: 'Invalid or expired authentication session.' });
     return;
   }
-  if (!user.emailVerified) {
-    res.status(403).json({ error: 'Verified Google account required.' });
+  const verified = await checkIsVerifiedOrBound(user, idToken);
+  if (!verified) {
+    res.status(403).json({ error: 'Authorized KEJMIN OPS account required.' });
     return;
   }
   req.fbUser = user;
@@ -638,6 +762,17 @@ function parseServiceAccountConfig(): {
 
 let lastEnvDriveError: string | null = null;
 
+function cleanEnvSecret(raw?: string): string {
+  const trimmed = (raw || '').replace(/^\uFEFF/, '').trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
 async function mintServiceAccountAccessToken(): Promise<{
   accessToken: string;
   expiresAt: number;
@@ -651,7 +786,7 @@ async function mintServiceAccountAccessToken(): Promise<{
   const claim = base64UrlEncode(
     JSON.stringify({
       iss: config.clientEmail,
-      scope: 'https://www.googleapis.com/auth/drive.file',
+      scope: 'https://www.googleapis.com/auth/drive',
       aud: config.tokenUri,
       iat: nowSec,
       exp: nowSec + 3600,
@@ -673,7 +808,16 @@ async function mintServiceAccountAccessToken(): Promise<{
     }),
   });
   if (!tokenRes.ok) {
-    throw new Error(`Service account token request failed (${tokenRes.status}).`);
+    let detail = '';
+    try {
+      const errJson = (await tokenRes.json()) as { error?: string; error_description?: string };
+      detail = [errJson.error, errJson.error_description].filter(Boolean).join(': ');
+    } catch {
+      // ignore non-JSON error
+    }
+    throw new Error(
+      `Service account token request failed (${tokenRes.status})${detail ? ` — ${detail}` : ''}.`
+    );
   }
   const tokenJson = (await tokenRes.json()) as { access_token?: string; expires_in?: number };
   if (!tokenJson.access_token) {
@@ -691,9 +835,9 @@ async function mintRefreshTokenAccessToken(): Promise<{
   expiresAt: number;
   accountEmail: string;
 } | null> {
-  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN?.trim();
-  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID?.trim();
-  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET?.trim();
+  const refreshToken = cleanEnvSecret(process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
+  const clientId = cleanEnvSecret(process.env.GOOGLE_DRIVE_CLIENT_ID);
+  const clientSecret = cleanEnvSecret(process.env.GOOGLE_DRIVE_CLIENT_SECRET);
   if (!refreshToken || !clientId || !clientSecret) return null;
 
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -707,7 +851,21 @@ async function mintRefreshTokenAccessToken(): Promise<{
     }),
   });
   if (!tokenRes.ok) {
-    throw new Error(`Google Drive refresh token exchange failed (${tokenRes.status}).`);
+    let detail = '';
+    try {
+      const errJson = (await tokenRes.json()) as { error?: string; error_description?: string };
+      if (errJson.error === 'invalid_client') {
+        detail =
+          'GOOGLE_DRIVE_CLIENT_ID or GOOGLE_DRIVE_CLIENT_SECRET in Settings -> Secrets was not found or mismatched in Google Cloud';
+      } else {
+        detail = [errJson.error, errJson.error_description].filter(Boolean).join(': ');
+      }
+    } catch {
+      // ignore non-JSON error
+    }
+    throw new Error(
+      `Permanent Drive secret error (${tokenRes.status})${detail ? ` — ${detail}` : ''}.`
+    );
   }
   const tokenJson = (await tokenRes.json()) as { access_token?: string; expires_in?: number };
   if (!tokenJson.access_token) {
@@ -716,19 +874,35 @@ async function mintRefreshTokenAccessToken(): Promise<{
   return {
     accessToken: tokenJson.access_token,
     expiresAt: Date.now() + Math.max(300, (tokenJson.expires_in || 3600) - 120) * 1000,
-    accountEmail: process.env.GOOGLE_DRIVE_ACCOUNT_LABEL?.trim() || 'Company Google Drive',
+    accountEmail: cleanEnvSecret(process.env.GOOGLE_DRIVE_ACCOUNT_LABEL) || 'Company Google Drive',
+  };
+}
+
+function getEnvDriveChecklist() {
+  const hasRefreshToken = Boolean(cleanEnvSecret(process.env.GOOGLE_DRIVE_REFRESH_TOKEN));
+  const hasClientId = Boolean(cleanEnvSecret(process.env.GOOGLE_DRIVE_CLIENT_ID));
+  const hasClientSecret = Boolean(cleanEnvSecret(process.env.GOOGLE_DRIVE_CLIENT_SECRET));
+  const hasServiceAccount = Boolean(parseServiceAccountConfig().config);
+  const hasSharedFolderId = Boolean(extractDriveFolderId(process.env.GOOGLE_DRIVE_SHARED_FOLDER_ID));
+  return {
+    hasRefreshToken,
+    hasClientId,
+    hasClientSecret,
+    hasServiceAccount,
+    hasSharedFolderId,
   };
 }
 
 function hasPermanentEnvDriveConfig(): 'service_account' | 'refresh_token' | null {
-  if (parseServiceAccountConfig().config) return 'service_account';
+  // Prefer OAuth Refresh Token when configured because it supports both personal Gmail Drive and Workspace Shared Drives
   if (
-    process.env.GOOGLE_DRIVE_REFRESH_TOKEN?.trim() &&
-    process.env.GOOGLE_DRIVE_CLIENT_ID?.trim() &&
-    process.env.GOOGLE_DRIVE_CLIENT_SECRET?.trim()
+    cleanEnvSecret(process.env.GOOGLE_DRIVE_REFRESH_TOKEN) &&
+    cleanEnvSecret(process.env.GOOGLE_DRIVE_CLIENT_ID) &&
+    cleanEnvSecret(process.env.GOOGLE_DRIVE_CLIENT_SECRET)
   ) {
     return 'refresh_token';
   }
+  if (parseServiceAccountConfig().config) return 'service_account';
   return null;
 }
 
@@ -848,17 +1022,27 @@ async function ensureRootDriveFolderWithToken(
   return createDriveFolderWithToken(accessToken, ROOT_FOLDER_NAME);
 }
 
-async function getActiveCompanyDriveAuth(): Promise<{
+interface ActiveDriveAuth {
   accessToken: string;
   rootFolderId: string;
   rootFolderUrl: string;
   mode: 'service_account' | 'refresh_token' | 'session';
-} | null> {
+}
+
+let lastEnvWarmAttemptAt = 0;
+
+async function getActiveCompanyDriveAuth(options?: {
+  forceRefresh?: boolean;
+}): Promise<ActiveDriveAuth | null> {
+  if (driveManuallyDisconnected) {
+    return null;
+  }
+
   const now = Date.now();
   const envMode = hasPermanentEnvDriveConfig();
 
   if (envMode) {
-    if (envDriveTokenCache && envDriveTokenCache.expiresAt > now + 30_000) {
+    if (!options?.forceRefresh && envDriveTokenCache && envDriveTokenCache.expiresAt > now + 30_000) {
       return {
         accessToken: envDriveTokenCache.accessToken,
         rootFolderId: envDriveTokenCache.rootFolderId,
@@ -891,6 +1075,7 @@ async function getActiveCompanyDriveAuth(): Promise<{
     } catch (err: unknown) {
       lastEnvDriveError =
         err instanceof Error ? err.message : 'Permanent Company Drive credentials failed.';
+      envDriveTokenCache = null;
       // Gracefully fall through to an active Admin Company Drive session if connected
     }
   }
@@ -912,13 +1097,53 @@ async function getActiveCompanyDriveAuth(): Promise<{
   return null;
 }
 
+/**
+ * Runs a Drive operation and, if Google returns 401 while permanent credentials are active,
+ * automatically mints a fresh access token and retries once transparently so the user is never disconnected.
+ */
+async function refreshDriveAuthOn401(prevMode: ActiveDriveAuth['mode']): Promise<ActiveDriveAuth | null> {
+  if (prevMode === 'refresh_token' || prevMode === 'service_account') {
+    envDriveTokenCache = null;
+    return getActiveCompanyDriveAuth({ forceRefresh: true });
+  }
+  companyDriveSession = null;
+  savePersistedDriveState();
+  return null;
+}
+
+// Proactively warm permanent Drive credentials on boot if configured and not manually disconnected
+if (hasPermanentEnvDriveConfig() && !driveManuallyDisconnected) {
+  lastEnvWarmAttemptAt = Date.now();
+  void getActiveCompanyDriveAuth().catch(() => {
+    // Error captured in lastEnvDriveError for Developer diagnostics
+  });
+}
+
 function getSafeDriveStatus(includeDevDetails = false) {
   const now = Date.now();
   const saCheck = parseServiceAccountConfig();
   const envMode = hasPermanentEnvDriveConfig();
-  const configWarning = includeDevDetails ? saCheck.warning || lastEnvDriveError : null;
+  const envChecklist = includeDevDetails ? getEnvDriveChecklist() : null;
+  let partialEnvWarning: string | null = null;
+  if (
+    includeDevDetails &&
+    !envMode &&
+    envChecklist &&
+    (envChecklist.hasRefreshToken || envChecklist.hasClientId || envChecklist.hasClientSecret)
+  ) {
+    const missing: string[] = [];
+    if (!envChecklist.hasRefreshToken) missing.push('GOOGLE_DRIVE_REFRESH_TOKEN');
+    if (!envChecklist.hasClientId) missing.push('GOOGLE_DRIVE_CLIENT_ID');
+    if (!envChecklist.hasClientSecret) missing.push('GOOGLE_DRIVE_CLIENT_SECRET');
+    if (missing.length > 0) {
+      partialEnvWarning = `Permanent Drive OAuth setup is incomplete. Missing secret(s): ${missing.join(', ')}.`;
+    }
+  }
+  const configWarning = includeDevDetails
+    ? saCheck.warning || lastEnvDriveError || partialEnvWarning
+    : null;
 
-  // If Developer explicitly connected a live session and permanent env failed, prefer the working session
+  // If Developer explicitly connected a live session and permanent env is absent or failed, prefer the working session
   if (
     !driveManuallyDisconnected &&
     companyDriveSession &&
@@ -929,6 +1154,8 @@ function getSafeDriveStatus(includeDevDetails = false) {
       connected: true,
       mode: 'session' as const,
       permanent: false,
+      permanentConfigured: Boolean(envMode),
+      permanentMode: envMode,
       connectedBy: companyDriveSession.connectedByName,
       accountLabel: includeDevDetails ? companyDriveSession.connectedByEmail : null,
       connectedAt: companyDriveSession.connectedAt,
@@ -940,6 +1167,7 @@ function getSafeDriveStatus(includeDevDetails = false) {
       hintEmail: includeDevDetails
         ? companyDriveSession.connectedByEmail || lastConnectedDriveEmail
         : null,
+      envChecklist,
     };
   }
 
@@ -949,9 +1177,14 @@ function getSafeDriveStatus(includeDevDetails = false) {
       connected: true,
       mode: envMode,
       permanent: true,
+      permanentConfigured: true,
+      permanentMode: envMode,
       connectedBy: 'Organization Drive (Permanent)',
       accountLabel: includeDevDetails
-        ? envDriveTokenCache?.accountEmail || saCheck.config?.clientEmail || 'Company Google Drive'
+        ? envDriveTokenCache?.accountEmail ||
+          process.env.GOOGLE_DRIVE_ACCOUNT_LABEL?.trim() ||
+          saCheck.config?.clientEmail ||
+          'Company Google Drive'
         : null,
       connectedAt: null,
       expiresAt: null,
@@ -964,6 +1197,7 @@ function getSafeDriveStatus(includeDevDetails = false) {
       configWarning: null,
       manuallyDisconnected: false,
       hintEmail: null,
+      envChecklist,
     };
   }
 
@@ -976,6 +1210,8 @@ function getSafeDriveStatus(includeDevDetails = false) {
     connected: false,
     mode: 'none' as const,
     permanent: false,
+    permanentConfigured: Boolean(envMode),
+    permanentMode: envMode,
     connectedBy: null,
     accountLabel: null,
     connectedAt: null,
@@ -985,6 +1221,7 @@ function getSafeDriveStatus(includeDevDetails = false) {
     configWarning,
     manuallyDisconnected: driveManuallyDisconnected,
     hintEmail: includeDevDetails ? lastConnectedDriveEmail : null,
+    envChecklist,
   };
 }
 
@@ -993,14 +1230,92 @@ function getSafeDriveStatus(includeDevDetails = false) {
 async function startServer() {
   const app = express();
   app.disable('x-powered-by');
+  app.use('/api', (_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
 
   const jsonParser = express.json({ limit: '1mb' });
+
+  // 0. Direct User ID + Password login slot lookup (returns integer version only; zero PII / zero user enumeration)
+  app.post('/api/auth/login-slot', jsonParser, (req: Request, res: Response) => {
+    const ip =
+      (typeof req.headers['x-forwarded-for'] === 'string'
+        ? req.headers['x-forwarded-for'].split(',')[0].trim()
+        : req.socket.remoteAddress) || 'unknown';
+    if (!checkLoginSlotRateLimit(ip)) {
+      res.status(429).json({ error: 'Too many sign-in attempts. Please wait a minute and try again.' });
+      return;
+    }
+    const rawEmpId = typeof req.body?.empId === 'string' ? req.body.empId.trim().toLowerCase() : '';
+    if (!SAFE_EMP_ID_RE.test(rawEmpId)) {
+      res.json({ version: 1 });
+      return;
+    }
+    const docId = toSafeDocId(rawEmpId);
+    res.json({ version: loginVersions.get(docId) || 1 });
+  });
+
+  // 0B. Sync active loginVersion map from Firestore authBindings (Admin/Developer only)
+  app.post(
+    '/api/auth/sync-slots',
+    requireVerifiedUser,
+    jsonParser,
+    async (req: AuthedRequest, res: Response) => {
+      const isAdm = await checkIsAdmin(req.fbUser!, req.fbIdToken!);
+      if (!isAdm) {
+        res.status(403).json({ error: 'Administrator access required.' });
+        return;
+      }
+      const rawSlots = req.body?.slots;
+      if (!rawSlots || typeof rawSlots !== 'object' || Array.isArray(rawSlots)) {
+        res.status(400).json({ error: 'Valid slots map is required.' });
+        return;
+      }
+      const entries = Object.entries(rawSlots as Record<string, unknown>);
+      if (entries.length > 1000) {
+        res.status(400).json({ error: 'Too many slot entries.' });
+        return;
+      }
+      const replaceAll = req.body?.replaceAll === true;
+      if (replaceAll) {
+        loginVersions.clear();
+      }
+      for (const [docId, version] of entries) {
+        if (
+          SAFE_DOC_ID_RE.test(docId) &&
+          typeof version === 'number' &&
+          Number.isInteger(version) &&
+          version >= 1 &&
+          version <= 9999
+        ) {
+          loginVersions.set(docId, version);
+        }
+      }
+      saveLoginVersions();
+      res.json({ ok: true, count: loginVersions.size });
+    }
+  );
 
   // 1. Shared Company Drive Status (readable by any signed-in verified employee)
   app.get('/api/drive/status', requireVerifiedUser, async (req: AuthedRequest, res: Response) => {
     const isDev = await checkIsDeveloper(req.fbUser!, req.fbIdToken!);
+    // Lazily warm permanent credentials once (with 30s cooldown) so status & rootFolderId stay accurate
+    if (
+      hasPermanentEnvDriveConfig() &&
+      !driveManuallyDisconnected &&
+      (!envDriveTokenCache || envDriveTokenCache.expiresAt <= Date.now() + 30_000) &&
+      Date.now() - lastEnvWarmAttemptAt > 30_000
+    ) {
+      lastEnvWarmAttemptAt = Date.now();
+      await getActiveCompanyDriveAuth().catch(() => {});
+    }
     const status = getSafeDriveStatus(isDev);
-    res.json(isDev ? status : { ...status, accountLabel: null, configWarning: null });
+    res.json(
+      isDev
+        ? status
+        : { ...status, accountLabel: null, configWarning: null, envChecklist: null, hintEmail: null }
+    );
   });
 
   // 2. Connect Company Google Drive (Developer only)
@@ -1017,6 +1332,33 @@ async function startServer() {
           res
             .status(403)
             .json({ error: 'Only Developers can connect or switch the Company Google Drive.' });
+          return;
+        }
+
+        // Fast-path: Re-enable permanent server-configured Company Drive without any Google popup
+        if (req.body?.usePermanent === true) {
+          if (!hasPermanentEnvDriveConfig()) {
+            res.status(400).json({
+              error:
+                'Permanent Company Drive secrets are not configured on the server yet. Add them in Settings -> Secrets first.',
+            });
+            return;
+          }
+          driveManuallyDisconnected = false;
+          envDriveTokenCache = null;
+          lastEnvDriveError = null;
+          savePersistedDriveState();
+
+          const active = await getActiveCompanyDriveAuth({ forceRefresh: true });
+          if (!active || active.mode === 'session') {
+            res.status(502).json({
+              error:
+                lastEnvDriveError ||
+                'Could not connect using the configured permanent Company Drive secrets. Verify the secret values and try again.',
+            });
+            return;
+          }
+          res.json(getSafeDriveStatus(true));
           return;
         }
 
@@ -1104,6 +1446,7 @@ async function startServer() {
         return;
       }
       companyDriveSession = null;
+      envDriveTokenCache = null;
       driveManuallyDisconnected = true;
       savePersistedDriveState();
       res.json(getSafeDriveStatus(true));
@@ -1142,8 +1485,26 @@ async function startServer() {
             ? requestedParent
             : driveAuth.rootFolderId;
 
-        const created = await createDriveFolderWithToken(driveAuth.accessToken, name, parentId);
-        res.json(created);
+        try {
+          const created = await createDriveFolderWithToken(driveAuth.accessToken, name, parentId);
+          res.json(created);
+        } catch (firstErr: unknown) {
+          if ((firstErr as { status?: number })?.status === 401) {
+            const refreshed = await refreshDriveAuthOn401(driveAuth.mode);
+            if (refreshed) {
+              const created = await createDriveFolderWithToken(
+                refreshed.accessToken,
+                name,
+                requestedParent && SAFE_ID_RE.test(requestedParent)
+                  ? requestedParent
+                  : refreshed.rootFolderId
+              );
+              res.json(created);
+              return;
+            }
+          }
+          throw firstErr;
+        }
       } catch (err: unknown) {
         const status = (err as { status?: number })?.status;
         if (status === 401) {
@@ -1254,7 +1615,7 @@ async function startServer() {
           }
         }
 
-        const initSession = async (targetParentId: string) => {
+        const initSession = async (targetParentId: string, token: string) => {
           if (mode === 'replace' && driveFileId) {
             return fetch(
               `${DRIVE_UPLOAD_BASE}/files/${encodeURIComponent(
@@ -1263,7 +1624,7 @@ async function startServer() {
               {
                 method: 'PATCH',
                 headers: {
-                  Authorization: `Bearer ${driveAuth.accessToken}`,
+                  Authorization: `Bearer ${token}`,
                   'Content-Type': 'application/json; charset=UTF-8',
                   'X-Upload-Content-Type': mimeType,
                   'X-Upload-Content-Length': String(Math.round(totalSize)),
@@ -1285,7 +1646,7 @@ async function startServer() {
             {
               method: 'POST',
               headers: {
-                Authorization: `Bearer ${driveAuth.accessToken}`,
+                Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json; charset=UTF-8',
                 'X-Upload-Content-Type': mimeType,
                 'X-Upload-Content-Length': String(Math.round(totalSize)),
@@ -1295,13 +1656,24 @@ async function startServer() {
           );
         };
 
-        let initRes = await initSession(parentDriveId);
+        let activeAuth = driveAuth;
+        let initRes = await initSession(parentDriveId, activeAuth.accessToken);
+        if (initRes.status === 401) {
+          const refreshed = await refreshDriveAuthOn401(activeAuth.mode);
+          if (refreshed) {
+            activeAuth = refreshed;
+            initRes = await initSession(
+              rawParent && SAFE_ID_RE.test(rawParent) ? rawParent : activeAuth.rootFolderId,
+              activeAuth.accessToken
+            );
+          }
+        }
         if (
           mode === 'create' &&
           initRes.status === 404 &&
-          parentDriveId !== driveAuth.rootFolderId
+          parentDriveId !== activeAuth.rootFolderId
         ) {
-          initRes = await initSession(driveAuth.rootFolderId);
+          initRes = await initSession(activeAuth.rootFolderId, activeAuth.accessToken);
         }
 
         if (initRes.status === 401) {
@@ -1811,14 +2183,28 @@ async function startServer() {
           upstreamHeaders.Range = req.headers.range;
         }
 
-        let driveRes = await fetch(
-          `${DRIVE_API_BASE}/files/${encodeURIComponent(
-            driveFileId
-          )}?alt=media&supportsAllDrives=true`,
-          {
-            headers: upstreamHeaders,
+        let activeAuth = driveAuth;
+        const fetchContent = (token: string) =>
+          fetch(
+            `${DRIVE_API_BASE}/files/${encodeURIComponent(
+              driveFileId
+            )}?alt=media&supportsAllDrives=true`,
+            {
+              headers: {
+                ...upstreamHeaders,
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+        let driveRes = await fetchContent(activeAuth.accessToken);
+        if (driveRes.status === 401) {
+          const refreshed = await refreshDriveAuthOn401(activeAuth.mode);
+          if (refreshed) {
+            activeAuth = refreshed;
+            driveRes = await fetchContent(activeAuth.accessToken);
           }
-        );
+        }
 
         // If the item is a native Google Doc/Sheet/Slide, export as PDF/XLSX cleanly
         if (driveRes.status === 403 || driveRes.status === 400) {
@@ -1832,7 +2218,7 @@ async function startServer() {
                 driveFileId
               )}/export?mimeType=${encodeURIComponent(exportMime)}&supportsAllDrives=true`,
               {
-                headers: { Authorization: `Bearer ${driveAuth.accessToken}` },
+                headers: { Authorization: `Bearer ${activeAuth.accessToken}` },
               }
             );
           }
@@ -1986,20 +2372,29 @@ async function startServer() {
           ? rawMime
           : 'application/octet-stream';
 
-        const driveRes = await fetch(
-          `${DRIVE_UPLOAD_BASE}/files/${encodeURIComponent(
-            driveFileId
-          )}?uploadType=media&supportsAllDrives=true&fields=id,name,mimeType,size`,
-          {
-            method: 'PATCH',
-            headers: {
-              Authorization: `Bearer ${driveAuth.accessToken}`,
-              'Content-Type': mimeType,
-              'Content-Length': String(fileBuffer.length),
-            },
-            body: new Uint8Array(fileBuffer),
+        const patchContent = (token: string) =>
+          fetch(
+            `${DRIVE_UPLOAD_BASE}/files/${encodeURIComponent(
+              driveFileId
+            )}?uploadType=media&supportsAllDrives=true&fields=id,name,mimeType,size`,
+            {
+              method: 'PATCH',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': mimeType,
+                'Content-Length': String(fileBuffer.length),
+              },
+              body: new Uint8Array(fileBuffer),
+            }
+          );
+
+        let driveRes = await patchContent(driveAuth.accessToken);
+        if (driveRes.status === 401) {
+          const refreshed = await refreshDriveAuthOn401(driveAuth.mode);
+          if (refreshed) {
+            driveRes = await patchContent(refreshed.accessToken);
           }
-        );
+        }
 
         if (driveRes.status === 401) {
           companyDriveSession = null;
@@ -2139,17 +2534,26 @@ async function startServer() {
           }
         }
 
-        const driveRes = await fetch(
-          `${DRIVE_API_BASE}/files/${encodeURIComponent(driveFileId)}?${queryParams.toString()}`,
-          {
-            method: 'PATCH',
-            headers: {
-              Authorization: `Bearer ${driveAuth.accessToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ name: newName }),
+        const patchMeta = (token: string) =>
+          fetch(
+            `${DRIVE_API_BASE}/files/${encodeURIComponent(driveFileId)}?${queryParams.toString()}`,
+            {
+              method: 'PATCH',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ name: newName }),
+            }
+          );
+
+        let driveRes = await patchMeta(driveAuth.accessToken);
+        if (driveRes.status === 401) {
+          const refreshed = await refreshDriveAuthOn401(driveAuth.mode);
+          if (refreshed) {
+            driveRes = await patchMeta(refreshed.accessToken);
           }
-        );
+        }
 
         if (driveRes.status === 401) {
           companyDriveSession = null;
@@ -2220,13 +2624,22 @@ async function startServer() {
           return;
         }
 
-        const driveRes = await fetch(
-          `${DRIVE_API_BASE}/files/${encodeURIComponent(driveFileId)}?supportsAllDrives=true`,
-          {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${driveAuth.accessToken}` },
+        const deleteItem = (token: string) =>
+          fetch(
+            `${DRIVE_API_BASE}/files/${encodeURIComponent(driveFileId)}?supportsAllDrives=true`,
+            {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+
+        let driveRes = await deleteItem(driveAuth.accessToken);
+        if (driveRes.status === 401) {
+          const refreshed = await refreshDriveAuthOn401(driveAuth.mode);
+          if (refreshed) {
+            driveRes = await deleteItem(refreshed.accessToken);
           }
-        );
+        }
 
         if (driveRes.status === 401) {
           companyDriveSession = null;

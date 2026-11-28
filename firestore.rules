@@ -12,12 +12,23 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isVerified() {
+    function isEmailVerified() {
       return isSignedIn() && request.auth.token.email_verified == true;
     }
 
+    function isBoundEmployee() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/authBindings/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/authBindings/$(request.auth.uid)).data.active == true &&
+        get(/databases/$(database)/documents/authBindings/$(request.auth.uid)).data.orgId == 'kejmin';
+    }
+
+    function isVerified() {
+      return isEmailVerified() || isBoundEmployee();
+    }
+
     function isAdminEmail() {
-      return isVerified() && request.auth.token.email == 'krushna.hka2@gmail.com';
+      return isEmailVerified() && request.auth.token.email == 'krushna.hka2@gmail.com';
     }
 
     function isAdmin() {
@@ -87,6 +98,26 @@ service cloud.firestore {
         data.createdAt is timestamp;
     }
 
+    function isValidAuthBinding(data) {
+      return data.keys().hasAll([
+          'uid', 'empId', 'docId', 'role', 'active', 'loginVersion',
+          'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid', 'empId', 'docId', 'role', 'active', 'loginVersion',
+          'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.uid) &&
+        data.empId is string && data.empId.size() >= 3 && data.empId.size() <= 32 && data.empId.matches('^[a-z0-9._]{3,20}$') &&
+        isValidId(data.docId) && data.docId.size() <= 64 &&
+        data.role is string && data.role.size() >= 1 && data.role.size() <= 60 &&
+        data.active is bool &&
+        data.loginVersion is int && data.loginVersion >= 1 && data.loginVersion <= 9999 &&
+        data.orgId == 'kejmin' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
     function isValidDirectoryEntry(data) {
       return data.keys().hasAll([
           'empId', 'docId', 'name', 'role', 'branch', 'location',
@@ -151,7 +182,7 @@ service cloud.firestore {
         data.name is string && data.name.size() >= 1 && data.name.size() <= 60 &&
         data.branchScope is string && data.branchScope.size() >= 1 && data.branchScope.size() <= 80 &&
         data.locationScope is string && data.locationScope.size() >= 1 && data.locationScope.size() <= 80 &&
-        data.permissions is list && data.permissions.size() <= 9 &&
+        data.permissions is list && data.permissions.size() <= 20 &&
         (data.permissions.size() == 0 || data.permissions[0] is int) &&
         data.builtin is bool &&
         data.orgId == 'kejmin' &&
@@ -305,7 +336,7 @@ service cloud.firestore {
         data.actor is string && data.actor.size() >= 1 && data.actor.size() <= 100 &&
         data.actorUserId is string && data.actorUserId.size() <= 40 &&
         data.actorUid is string && data.actorUid.size() >= 1 && data.actorUid.size() <= 128 &&
-        data.category in ['Sign-in', 'Task', 'User', 'Delete', 'Attendance', 'Role', 'Security', 'Export', 'Upload'] &&
+        data.category in ['Sign-in', 'Task', 'User', 'Delete', 'Attendance', 'Role', 'Security', 'Export', 'Upload', 'Ticket'] &&
         data.action is string && data.action.size() >= 1 && data.action.size() <= 500 &&
         data.target is string && data.target.size() <= 160 &&
         data.before is string && data.before.size() <= 500 &&
@@ -408,6 +439,90 @@ service cloud.firestore {
         data.updatedAt is timestamp;
     }
 
+    function isValidCalendarTodo(data) {
+      return data.keys().hasAll([
+          'todoId', 'empId', 'employeeName', 'date', 'text',
+          'done', 'color', 'actorUid', 'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'todoId', 'empId', 'employeeName', 'date', 'text',
+          'done', 'color', 'actorUid', 'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.todoId) && data.todoId.size() <= 64 &&
+        data.empId is string && data.empId.size() >= 1 && data.empId.size() <= 32 &&
+        data.employeeName is string && data.employeeName.size() >= 1 && data.employeeName.size() <= 100 &&
+        isValidDate(data.date) &&
+        data.text is string && data.text.size() >= 1 && data.text.size() <= 240 &&
+        data.done is bool &&
+        data.color in ['yellow', 'blue', 'green', 'pink'] &&
+        data.actorUid is string && data.actorUid.size() >= 1 && data.actorUid.size() <= 128 &&
+        data.orgId == 'kejmin' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidSupportTicket(data) {
+      return data.keys().hasAll([
+          'ticketId', 'ticketNumber', 'title', 'desc', 'type', 'pri',
+          'status', 'assignee', 'reporter', 'reporterEmpId', 'reporterUid',
+          'incident', 'labels', 'subs', 'comments', 'log', 'attachmentCount',
+          'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'ticketId', 'ticketNumber', 'title', 'desc', 'type', 'pri',
+          'status', 'assignee', 'reporter', 'reporterEmpId', 'reporterUid',
+          'incident', 'labels', 'subs', 'comments', 'log', 'attachmentCount',
+          'orgId', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.ticketId) && data.ticketId.size() <= 64 &&
+        data.ticketNumber is int && data.ticketNumber >= 1 && data.ticketNumber <= 999999 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.desc is string && data.desc.size() <= 4000 &&
+        data.type is string && data.type.size() >= 1 && data.type.size() <= 30 &&
+        data.pri in ['High', 'Medium', 'Low'] &&
+        data.status in ['created', 'review', 'resp', 'closed', 'reopen'] &&
+        data.assignee is string && data.assignee.size() <= 100 &&
+        data.reporter is string && data.reporter.size() >= 1 && data.reporter.size() <= 100 &&
+        data.reporterEmpId is string && data.reporterEmpId.size() >= 1 && data.reporterEmpId.size() <= 32 &&
+        data.reporterUid is string && data.reporterUid.size() >= 1 && data.reporterUid.size() <= 128 &&
+        data.incident is string && data.incident.size() <= 25 &&
+        data.labels is list && data.labels.size() <= 20 &&
+        (data.labels.size() == 0 || data.labels[0] is string) &&
+        data.subs is list && data.subs.size() <= 50 &&
+        (data.subs.size() == 0 || data.subs[0] is map) &&
+        data.comments is list && data.comments.size() <= 100 &&
+        (data.comments.size() == 0 || data.comments[0] is map) &&
+        data.log is list && data.log.size() <= 100 &&
+        (data.log.size() == 0 || data.log[0] is map) &&
+        data.attachmentCount is int && data.attachmentCount >= 0 && data.attachmentCount <= 50 &&
+        data.orgId == 'kejmin' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidTicketAttachment(data) {
+      return data.keys().hasAll([
+          'attachmentId', 'ticketId', 'name', 'type', 'size', 'cat',
+          'by', 'byUid', 'at', 'data', 'orgId', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'attachmentId', 'ticketId', 'name', 'type', 'size', 'cat',
+          'by', 'byUid', 'at', 'data', 'orgId', 'createdAt'
+        ]) &&
+        isValidId(data.attachmentId) && data.attachmentId.size() <= 64 &&
+        isValidId(data.ticketId) && data.ticketId.size() <= 64 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 200 &&
+        data.type is string && data.type.size() >= 1 && data.type.size() <= 100 &&
+        data.size is number && data.size >= 0 && data.size <= 2097152 &&
+        data.cat in ['Inspection', 'Proof', 'Reference'] &&
+        data.by is string && data.by.size() >= 1 && data.by.size() <= 100 &&
+        data.byUid is string && data.byUid.size() >= 1 && data.byUid.size() <= 128 &&
+        data.at is string && data.at.size() >= 1 && data.at.size() <= 40 &&
+        data.data is string && data.data.size() >= 1 && data.data.size() <= 800000 &&
+        data.orgId == 'kejmin' &&
+        data.createdAt is timestamp;
+    }
+
     // ===== Collection Rules =====
 
     match /admins/{uid} {
@@ -418,6 +533,38 @@ service cloud.firestore {
       allow update: if isVerified() && isValidId(uid) && isValidAdminRecord(incoming()) &&
         incoming().uid == existing().uid && incoming().createdAt == existing().createdAt && isDeveloper();
       allow delete: if isVerified() && isValidId(uid) && isDeveloper() && uid != request.auth.uid;
+    }
+
+    match /authBindings/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isAdmin());
+      allow list: if isVerified() && isAdmin() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(uid) && isValidAuthBinding(incoming()) &&
+        incoming().uid == uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time && (
+          isDeveloper() ||
+          (isAdmin() && roleRank(incoming().role) < roleRank(actorRole()))
+        );
+      allow update: if isVerified() && isValidId(uid) && isValidAuthBinding(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().empId == existing().empId &&
+        incoming().docId == existing().docId &&
+        incoming().orgId == existing().orgId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isDeveloper() || (
+            isAdmin() &&
+            roleRank(existing().role) < roleRank(actorRole()) &&
+            roleRank(incoming().role) < roleRank(actorRole())
+          )
+        );
+      allow delete: if isVerified() && isValidId(uid) && (
+        isDeveloper() || (
+          isAdmin() &&
+          uid != request.auth.uid &&
+          roleRank(existing().role) < roleRank(actorRole())
+        )
+      );
     }
 
     match /directory/{empDocId} {
@@ -559,12 +706,12 @@ service cloud.firestore {
       allow create: if isVerified() && isValidId(pathId) && isValidPath(incoming()) &&
         incoming().pathId == pathId &&
         incoming().createdAt == request.time &&
-        incoming().updatedAt == request.time && isAdmin();
+        incoming().updatedAt == request.time;
       allow update: if isVerified() && isValidId(pathId) && isValidPath(incoming()) &&
         incoming().pathId == existing().pathId &&
         incoming().orgId == existing().orgId &&
         incoming().createdAt == existing().createdAt &&
-        incoming().updatedAt == request.time && isAdmin();
+        incoming().updatedAt == request.time;
       allow delete: if isVerified() && isValidId(pathId) && isAdmin();
     }
 
@@ -621,7 +768,7 @@ service cloud.firestore {
         incoming().actorUid == request.auth.uid &&
         incoming().at == request.time;
       allow update: if false;
-      allow delete: if isVerified() && isValidId(eventId) && isAdmin() && eventId.matches('^scr_seed_[0-9]+$');
+      allow delete: if isVerified() && isValidId(eventId) && (isDeveloper() || (isAdmin() && eventId.matches('^scr_seed_[0-9]+$')));
     }
 
     match /attendance/{recordId} {
@@ -684,7 +831,7 @@ service cloud.firestore {
         incoming().actorUid == request.auth.uid &&
         incoming().at == request.time;
       allow update: if false;
-      allow delete: if isVerified() && isValidId(logId) && isDeveloper() && logId.matches('^log_seed_[0-9]+$');
+      allow delete: if isVerified() && isValidId(logId) && isDeveloper();
     }
 
     match /notifications/{notifId} {
@@ -760,6 +907,87 @@ service cloud.firestore {
         );
       allow delete: if isVerified() && isValidId(fileId) && (
         isAdmin() || existing().uploadedByUid == request.auth.uid
+      );
+    }
+
+    match /calendarTodos/{todoId} {
+      allow get: if isVerified() && isValidId(todoId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(todoId) && isValidCalendarTodo(incoming()) &&
+        incoming().todoId == todoId &&
+        incoming().actorUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerified() && isValidId(todoId) && isValidCalendarTodo(incoming()) &&
+        incoming().todoId == existing().todoId &&
+        incoming().empId == existing().empId &&
+        incoming().orgId == existing().orgId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() || (
+            existing().actorUid == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['text', 'done', 'color', 'date', 'updatedAt'])
+          )
+        );
+      allow delete: if isVerified() && isValidId(todoId) && (
+        isAdmin() || existing().actorUid == request.auth.uid
+      );
+    }
+
+    match /supportTickets/{ticketId} {
+      allow get: if isVerified() && isValidId(ticketId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(ticketId) && isValidSupportTicket(incoming()) &&
+        incoming().ticketId == ticketId &&
+        incoming().reporterUid == request.auth.uid &&
+        incoming().status == 'created' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerified() && isValidId(ticketId) && isValidSupportTicket(incoming()) &&
+        incoming().ticketId == existing().ticketId &&
+        incoming().ticketNumber == existing().ticketNumber &&
+        incoming().reporter == existing().reporter &&
+        incoming().reporterEmpId == existing().reporterEmpId &&
+        incoming().reporterUid == existing().reporterUid &&
+        incoming().orgId == existing().orgId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'log', 'updatedAt'])
+          ) ||
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['comments', 'log', 'updatedAt'])
+          ) ||
+          (
+            existing().status != 'closed' &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'title', 'desc', 'type', 'pri', 'status', 'assignee',
+              'incident', 'labels', 'subs', 'comments', 'log', 'attachmentCount', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isVerified() && isValidId(ticketId) && (
+        isAdmin() || existing().reporterUid == request.auth.uid
+      );
+    }
+
+    match /ticketAttachments/{attachmentId} {
+      allow get: if isVerified() && isValidId(attachmentId) && (resource == null || existing().orgId == 'kejmin');
+      allow list: if isVerified() && resource.data.orgId == 'kejmin';
+      allow create: if isVerified() && isValidId(attachmentId) && isValidTicketAttachment(incoming()) &&
+        incoming().attachmentId == attachmentId &&
+        incoming().byUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        existsAfter(/databases/$(database)/documents/supportTickets/$(incoming().ticketId));
+      allow update: if false;
+      allow delete: if isVerified() && isValidId(attachmentId) && (
+        isAdmin() ||
+        existing().byUid == request.auth.uid ||
+        (
+          exists(/databases/$(database)/documents/supportTickets/$(existing().ticketId)) &&
+          get(/databases/$(database)/documents/supportTickets/$(existing().ticketId)).data.reporterUid == request.auth.uid
+        )
       );
     }
   }

@@ -25,6 +25,7 @@ import {
 interface ReportsViewProps {
   me: DirectoryEntry;
   canSeeAll: boolean;
+  canExportReports: boolean;
   directory: DirectoryEntry[];
   branches: string[];
   locations: string[];
@@ -43,6 +44,7 @@ const CHART_COLORS = ['#1d4f9f', '#c9772a', '#b83a2e'];
 export const ReportsView: React.FC<ReportsViewProps> = ({
   me,
   canSeeAll,
+  canExportReports,
   directory,
   branches,
   locations,
@@ -406,15 +408,12 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const renderHBars = (rows: Array<[string, number]>, mx: number, suf = '') => {
     if (!rows.length) return <div className="sub">No data for these filters.</div>;
     return rows.map(([label, val]) => (
-      <div
-        key={label}
-        style={{ display: 'flex', gap: 10, alignItems: 'center', margin: '8px 0' }}
-      >
-        <span style={{ width: 125, fontSize: 13 }}>{label}</span>
-        <div className="bar" style={{ flex: 1 }}>
+      <div key={label} className="rep-hbar">
+        <span className="rep-hbar-lbl">{label}</span>
+        <div className="bar rep-hbar-track">
           <i style={{ width: `${mx ? Math.max(0, (val / mx) * 100) : 0}%` }} />
         </div>
-        <b style={{ width: 48, textAlign: 'right' }}>
+        <b className="rep-hbar-val">
           {val}
           {suf}
         </b>
@@ -427,7 +426,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     const denom = total || 1;
     let offset = 25;
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+      <div className="rep-donut-wrap">
         <svg viewBox="0 0 42 42" width="140">
           <circle
             cx="21"
@@ -563,6 +562,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           : 'Detail filter';
 
   const handleExport = () => {
+    if (!canExportReports) return;
     const wb = XLSX.utils.book_new();
     const generatedAt = `${td} ${nowTimeStr()}`;
     const filterSummary = [
@@ -1000,37 +1000,41 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 Reset
               </button>
             )}
-            <button
-              className="rep-btn rep-btn-secondary"
-              type="button"
-              onClick={() => {
-                onPrint();
-                try {
-                  window.print();
-                } catch {
-                  // ignore
-                }
-              }}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 9V4h12v5" />
-                <rect x="6" y="14" width="12" height="6" rx="1" />
-                <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
-              </svg>
-              Print
-            </button>
-            <button
-              className="rep-btn rep-btn-primary"
-              id="ex"
-              type="button"
-              onClick={handleExport}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 3v12m0 0l-4-4m4 4l4-4" />
-                <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
-              </svg>
-              Export Excel
-            </button>
+            {canExportReports && (
+              <>
+                <button
+                  className="rep-btn rep-btn-secondary"
+                  type="button"
+                  onClick={() => {
+                    onPrint();
+                    try {
+                      window.print();
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M6 9V4h12v5" />
+                    <rect x="6" y="14" width="12" height="6" rx="1" />
+                    <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
+                  </svg>
+                  Print
+                </button>
+                <button
+                  className="rep-btn rep-btn-primary"
+                  id="ex"
+                  type="button"
+                  onClick={handleExport}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3v12m0 0l-4-4m4 4l4-4" />
+                    <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+                  </svg>
+                  Export Excel
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -1222,7 +1226,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         {viewBy !== 'Overall' && (
           <div className="glass sec">
             <h3>{viewBy} breakdown</h3>
-            <div className="tbl">
+            <div className="tbl m-card-tbl">
               <table>
                 <thead>
                   <tr>
@@ -1237,14 +1241,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 <tbody>
                   {reportData.breakdownRows.map((row) => (
                     <tr key={row.group}>
-                      <td>
+                      <td data-label={viewBy.replace(' wise', '')}>
                         <b>{row.group}</b>
                       </td>
-                      <td>{row.pts}</td>
-                      <td>{row.tasks}</td>
-                      <td>{row.done}</td>
-                      <td>{row.attPct}%</td>
-                      <td>{row.hours}</td>
+                      <td data-label="Points">{row.pts}</td>
+                      <td data-label="Tasks">{row.tasks}</td>
+                      <td data-label="Done">{row.done}</td>
+                      <td data-label="Attendance">{row.attPct}%</td>
+                      <td data-label="Hours">{row.hours}</td>
                     </tr>
                   ))}
                 </tbody>

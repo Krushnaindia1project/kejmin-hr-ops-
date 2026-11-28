@@ -7,6 +7,7 @@ export type ViewId =
   | 'att'
   | 'flow'
   | 'kpi'
+  | 'tickets'
   | 'rep'
   | 'roles'
   | 'blue'
@@ -26,7 +27,8 @@ export type AuditCategory =
   | 'Role'
   | 'Security'
   | 'Export'
-  | 'Upload';
+  | 'Upload'
+  | 'Ticket';
 
 export interface DirectoryEntry {
   empId: string;
@@ -143,6 +145,22 @@ export interface AttendanceRecord {
   updatedAt?: Timestamp;
 }
 
+export type TodoNoteColor = 'yellow' | 'blue' | 'green' | 'pink';
+
+export interface CalendarTodo {
+  todoId: string;
+  empId: string;
+  employeeName: string;
+  date: string;
+  text: string;
+  done: boolean;
+  color: TodoNoteColor;
+  actorUid: string;
+  orgId: 'kejmin';
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export interface Holiday {
   holidayId: string;
   date: string;
@@ -244,6 +262,66 @@ export interface SharedFileDoc {
   updatedAt?: Timestamp;
 }
 
+export type TicketStatus = 'created' | 'review' | 'resp' | 'closed' | 'reopen';
+export type TicketAttachmentCategory = 'Inspection' | 'Proof' | 'Reference';
+
+export interface TicketSubtask {
+  id: string;
+  t: string;
+  d: boolean;
+}
+
+export interface TicketComment {
+  id: string;
+  u: string;
+  empId: string;
+  t: string;
+  at: string;
+}
+
+export interface TicketLogEntry {
+  t: string;
+  at: string;
+}
+
+export interface SupportTicketDoc {
+  ticketId: string;
+  ticketNumber: number;
+  title: string;
+  desc: string;
+  type: string;
+  pri: Priority;
+  status: TicketStatus;
+  assignee: string;
+  reporter: string;
+  reporterEmpId: string;
+  reporterUid: string;
+  incident: string;
+  labels: string[];
+  subs: TicketSubtask[];
+  comments: TicketComment[];
+  log: TicketLogEntry[];
+  attachmentCount: number;
+  orgId: 'kejmin';
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface TicketAttachmentDoc {
+  attachmentId: string;
+  ticketId: string;
+  name: string;
+  type: string;
+  size: number;
+  cat: TicketAttachmentCategory;
+  by: string;
+  byUid: string;
+  at: string;
+  data: string;
+  orgId: 'kejmin';
+  createdAt?: Timestamp;
+}
+
 export const WEIGHTS: Record<Priority, number> = {
   Low: 1,
   Medium: 3,
@@ -260,6 +338,7 @@ export const PERMISSIONS = [
   'Manage users',
   'Correct attendance',
   'Delete tasks',
+  'Share Folder',
 ] as const;
 
 export const BUILTIN_ROLES = [

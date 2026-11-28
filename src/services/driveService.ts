@@ -9,10 +9,20 @@ export class DriveConnectionRequiredError extends Error {
   }
 }
 
+export interface DriveEnvChecklist {
+  hasRefreshToken: boolean;
+  hasClientId: boolean;
+  hasClientSecret: boolean;
+  hasServiceAccount: boolean;
+  hasSharedFolderId: boolean;
+}
+
 export interface CompanyDriveStatus {
   connected: boolean;
   mode: 'service_account' | 'refresh_token' | 'session' | 'none';
   permanent: boolean;
+  permanentConfigured?: boolean;
+  permanentMode?: 'service_account' | 'refresh_token' | null;
   connectedBy: string | null;
   accountLabel: string | null;
   connectedAt: string | null;
@@ -22,6 +32,7 @@ export interface CompanyDriveStatus {
   configWarning?: string | null;
   manuallyDisconnected?: boolean;
   hintEmail?: string | null;
+  envChecklist?: DriveEnvChecklist | null;
 }
 
 export interface DriveFolderResult {
@@ -73,21 +84,66 @@ async function parseApiJson<T>(res: Response): Promise<T> {
   }
   if (!body) {
     throw new Error(
-      `Server returned an unexpected non-JSON response (${res.status}). Please refresh the page and try again.`
+      `The app server returned a non-JSON response (${res.status}). Wait a moment for the server to finish restarting or refresh the page and try again.`
     );
   }
   return body as T;
 }
 
 /**
+ * Fetches an authenticated `/api/drive/*` JSON endpoint with `credentials: 'include'` and
+ * `cache: 'no-store'` (required behind Cloud Run / AI Studio auth proxies) and retries once
+ * if a transient HTML interstitial / restart page is returned.
+ */
+async function fetchDriveApiJson<T>(
+  url: string,
+  init: RequestInit = {}
+): Promise<T> {
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const idToken = await getFirebaseIdToken();
+    const headers = new Headers(init.headers);
+    headers.set('Authorization', `Bearer ${idToken}`);
+    headers.set('Accept', 'application/json');
+
+    const res = await fetch(url, {
+      ...init,
+      credentials: 'include',
+      cache: 'no-store',
+      headers,
+    });
+
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    if (res.ok && !contentType.includes('application/json') && attempt === 0) {
+      // Transient proxy interstitial or dev-server restart HTML — retry once cleanly
+      await new Promise((r) => window.setTimeout(r, 700));
+      continue;
+    }
+    try {
+      return await parseApiJson<T>(res);
+    } catch (err: unknown) {
+      lastErr = err;
+      if (
+        attempt === 0 &&
+        err instanceof Error &&
+        err.message.includes('non-JSON response')
+      ) {
+        await new Promise((r) => window.setTimeout(r, 700));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('Server request failed. Please try again.');
+}
+
+/**
  * Checks whether the shared Company Google Drive is currently connected on the server.
  */
 export async function fetchCompanyDriveStatus(): Promise<CompanyDriveStatus> {
-  const idToken = await getFirebaseIdToken();
-  const res = await fetch('/api/drive/status', {
-    headers: { Authorization: `Bearer ${idToken}` },
+  return fetchDriveApiJson<CompanyDriveStatus>('/api/drive/status', {
+    method: 'GET',
   });
-  return parseApiJson<CompanyDriveStatus>(res);
 }
 
 /**
@@ -98,29 +154,36 @@ export async function connectCompanyDriveOnServer(
   driveAccessToken: string,
   connectedByName?: string
 ): Promise<CompanyDriveStatus> {
-  const idToken = await getFirebaseIdToken();
-  const res = await fetch('/api/drive/connect', {
+  return fetchDriveApiJson<CompanyDriveStatus>('/api/drive/connect', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${idToken}`,
       'Content-Type': 'application/json',
       'X-Drive-Access-Token': driveAccessToken,
     },
     body: JSON.stringify({ connectedByName: connectedByName || '' }),
   });
-  return parseApiJson<CompanyDriveStatus>(res);
+}
+
+/**
+ * Re-enables the permanent server-configured Company Google Drive connection without any browser popup.
+ */
+export async function reconnectPermanentCompanyDriveOnServer(): Promise<CompanyDriveStatus> {
+  return fetchDriveApiJson<CompanyDriveStatus>('/api/drive/connect', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ usePermanent: true }),
+  });
 }
 
 /**
  * Disconnects the shared Company Google Drive session on the server (Admin/Developer only).
  */
 export async function disconnectCompanyDriveOnServer(): Promise<CompanyDriveStatus> {
-  const idToken = await getFirebaseIdToken();
-  const res = await fetch('/api/drive/disconnect', {
+  return fetchDriveApiJson<CompanyDriveStatus>('/api/drive/disconnect', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${idToken}` },
   });
-  return parseApiJson<CompanyDriveStatus>(res);
 }
 
 /**
@@ -130,11 +193,9 @@ export async function createCompanyDriveFolder(
   folderName: string,
   parentDriveFolderId?: string
 ): Promise<DriveFolderResult> {
-  const idToken = await getFirebaseIdToken();
-  const res = await fetch('/api/drive/folders', {
+  return fetchDriveApiJson<DriveFolderResult>('/api/drive/folders', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${idToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -142,7 +203,6 @@ export async function createCompanyDriveFolder(
       parentDriveFolderId: parentDriveFolderId || '',
     }),
   });
-  return parseApiJson<DriveFolderResult>(res);
 }
 
 interface ResumableInitResponse {

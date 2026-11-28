@@ -109,7 +109,15 @@ export const RolesView: React.FC<RolesViewProps> = ({
     setEditName(r.name);
     setEditSb(r.branchScope);
     setEditSl(r.locationScope);
-    setEditPerms([...r.permissions]);
+    setEditPerms(
+      Array.from(
+        new Set(
+          (r.permissions || []).filter(
+            (p) => Number.isInteger(p) && p >= 0 && p < PERMISSIONS.length
+          )
+        )
+      ).sort((a, b) => a - b)
+    );
     setEditErr('');
   };
 
@@ -169,7 +177,13 @@ export const RolesView: React.FC<RolesViewProps> = ({
       setEditing(null);
       onToast('Role updated');
     } catch (err: unknown) {
-      setEditErr(err instanceof Error ? err.message : 'Unable to update role.');
+      const raw = err instanceof Error ? err.message : 'Unable to update role.';
+      try {
+        const parsed = JSON.parse(raw) as { error?: string };
+        setEditErr(parsed.error || raw);
+      } catch {
+        setEditErr(raw);
+      }
     } finally {
       setBusy(false);
     }
@@ -187,7 +201,7 @@ export const RolesView: React.FC<RolesViewProps> = ({
     <div className="view on" id="v-roles">
       <div className="glass sec" style={{ marginTop: 0 }}>
         <h3>Roles and access</h3>
-        <div className="tbl">
+        <div className="tbl roles-dtbl">
           <table id="rt">
             <thead>
               <tr>
@@ -232,6 +246,41 @@ export const RolesView: React.FC<RolesViewProps> = ({
             </tbody>
           </table>
         </div>
+
+        <div className="m-only role-cards">
+          {visibleRoles.map((r) => {
+            const canEditThisRole = canManageRoles && canManageTargetRole(me.role, r.name);
+            const activePermNames = PERMISSIONS.filter((_, idx) => r.permissions.includes(idx));
+            return (
+              <div key={r.roleId} className="role-m-card">
+                <div className="role-m-hd">
+                  <div>
+                    <b>{r.name}</b>
+                    <div className="sub">{scopeText(r.branchScope, r.locationScope)}</div>
+                  </div>
+                  {canManageRoles &&
+                    (canEditThisRole ? (
+                      <button className="btn g" type="button" onClick={() => openEdit(r)}>
+                        Edit
+                      </button>
+                    ) : (
+                      <span className="sub">
+                        {r.name === me.role ? 'Your role' : 'Protected'}
+                      </span>
+                    ))}
+                </div>
+                <div className="role-m-perms">
+                  {activePermNames.length ? (
+                    activePermNames.join(' · ')
+                  ) : (
+                    <span className="sub">Standard view access only</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
         <div className="sub" style={{ marginTop: 10 }}>
           Developer is not listed because it always has full, unrestricted access to every
           screen and action. Non-Developer users can only modify roles strictly lower than

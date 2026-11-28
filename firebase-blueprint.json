@@ -62,7 +62,7 @@
         "name": { "type": "string", "minLength": 1, "maxLength": 60 },
         "branchScope": { "type": "string", "minLength": 1, "maxLength": 80 },
         "locationScope": { "type": "string", "minLength": 1, "maxLength": 80 },
-        "permissions": { "type": "array", "description": "Permission indices 0..8 (max 9 items)" },
+        "permissions": { "type": "array", "description": "Permission indices 0..9 (max 20 items)" },
         "builtin": { "type": "boolean" },
         "orgId": { "type": "string", "enum": ["kejmin"] },
         "createdAt": { "type": "string", "format": "date-time" },
@@ -219,7 +219,7 @@
         "actor": { "type": "string", "minLength": 1, "maxLength": 100 },
         "actorUserId": { "type": "string", "maxLength": 40 },
         "actorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
-        "category": { "type": "string", "enum": ["Sign-in", "Task", "User", "Delete", "Attendance", "Role", "Security", "Export", "Upload"] },
+        "category": { "type": "string", "enum": ["Sign-in", "Task", "User", "Delete", "Attendance", "Role", "Security", "Export", "Upload", "Ticket"] },
         "action": { "type": "string", "minLength": 1, "maxLength": 500 },
         "target": { "type": "string", "maxLength": 160 },
         "before": { "type": "string", "maxLength": 500 },
@@ -299,12 +299,100 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["fileId", "folderId", "name", "mimeType", "sizeBytes", "driveFileId", "webViewLink", "webContentLink", "branch", "location", "category", "description", "accessScope", "allowedEmpIds", "allowDownload", "uploadedBy", "uploadedByEmpId", "uploadedByUid", "orgId", "createdAt", "updatedAt"]
+    },
+    "CalendarTodo": {
+      "title": "CalendarTodo",
+      "description": "Personal sticky-note to-do item pinned to a specific calendar date on the Attendance My Month calendar.",
+      "type": "object",
+      "properties": {
+        "todoId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "empId": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "employeeName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", "maxLength": 10 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "done": { "type": "boolean" },
+        "color": { "type": "string", "enum": ["yellow", "blue", "green", "pink"] },
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["todoId", "empId", "employeeName", "date", "text", "done", "color", "actorUid", "orgId", "createdAt", "updatedAt"]
+    },
+    "AuthBinding": {
+      "title": "AuthBinding",
+      "description": "Admin-provisioned binding mapping a Firebase Email/Password Auth UID to an active employee account.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "empId": { "type": "string", "minLength": 3, "maxLength": 32, "pattern": "^[a-z0-9._]{3,20}$" },
+        "docId": { "type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "role": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "active": { "type": "boolean" },
+        "loginVersion": { "type": "number" },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "empId", "docId", "role", "active", "loginVersion", "orgId", "createdAt", "updatedAt"]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "Operational support ticket with status workflow, subtasks, comments, activity log, and linked evidence attachments.",
+      "type": "object",
+      "properties": {
+        "ticketId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ticketNumber": { "type": "integer" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "desc": { "type": "string", "maxLength": 4000 },
+        "type": { "type": "string", "minLength": 1, "maxLength": 30 },
+        "pri": { "type": "string", "enum": ["High", "Medium", "Low"] },
+        "status": { "type": "string", "enum": ["created", "review", "resp", "closed", "reopen"] },
+        "assignee": { "type": "string", "maxLength": 100 },
+        "reporter": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "reporterEmpId": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "reporterUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "incident": { "type": "string", "maxLength": 25 },
+        "labels": { "type": "array", "description": "Ticket labels (max 20 strings)" },
+        "subs": { "type": "array", "description": "Subtask checklist items (max 50 maps)" },
+        "comments": { "type": "array", "description": "Threaded ticket comments (max 100 maps)" },
+        "log": { "type": "array", "description": "Reverse-chronological activity entries (max 100 maps)" },
+        "attachmentCount": { "type": "integer" },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ticketId", "ticketNumber", "title", "desc", "type", "pri", "status", "assignee", "reporter", "reporterEmpId", "reporterUid", "incident", "labels", "subs", "comments", "log", "attachmentCount", "orgId", "createdAt", "updatedAt"]
+    },
+    "TicketAttachment": {
+      "title": "TicketAttachment",
+      "description": "Image or PDF evidence attachment stored per document and linked to a SupportTicket.",
+      "type": "object",
+      "properties": {
+        "attachmentId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ticketId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "type": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "size": { "type": "number" },
+        "cat": { "type": "string", "enum": ["Inspection", "Proof", "Reference"] },
+        "by": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "byUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "at": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "data": { "type": "string", "minLength": 1, "maxLength": 800000 },
+        "orgId": { "type": "string", "enum": ["kejmin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["attachmentId", "ticketId", "name", "type", "size", "cat", "by", "byUid", "at", "data", "orgId", "createdAt"]
     }
   },
   "firestore": {
     "/admins/{uid}": {
       "schema": { "$ref": "#/entities/AdminRecord" },
       "description": "Trusted admin UID registry for role verification."
+    },
+    "/authBindings/{uid}": {
+      "schema": { "$ref": "#/entities/AuthBinding" },
+      "description": "Admin-provisioned mapping authorizing Email/Password employee accounts in Firestore rules."
     },
     "/directory/{empDocId}": {
       "schema": { "$ref": "#/entities/DirectoryEntry" },
@@ -365,6 +453,18 @@
     "/sharedFiles/{fileId}": {
       "schema": { "$ref": "#/entities/SharedFile" },
       "description": "Files uploaded directly to Google Drive and shared with authorized team members."
+    },
+    "/calendarTodos/{todoId}": {
+      "schema": { "$ref": "#/entities/CalendarTodo" },
+      "description": "Per-employee sticky-note to-do items attached to dates in the Attendance My Month calendar."
+    },
+    "/supportTickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/SupportTicket" },
+      "description": "Support and issue tracking tickets with status workflow, subtasks, comments, and activity history."
+    },
+    "/ticketAttachments/{attachmentId}": {
+      "schema": { "$ref": "#/entities/TicketAttachment" },
+      "description": "Image and PDF evidence attachments linked to support tickets."
     }
   }
 }

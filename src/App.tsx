@@ -5,13 +5,14 @@ import {
   clearDriveAccessToken,
   googleProvider,
   setDriveAccessToken,
-  trySilentGoogleDriveToken,
+  signInEmployeeWithPassword,
 } from './firebase';
 import {
   AttendanceRecord,
   AttendanceSettings,
   AuditLogEntry,
   BOOTSTRAP_ADMIN_EMAIL,
+  CalendarTodo,
   DEFAULT_BRANCHES,
   DEFAULT_LOCATIONS,
   DirectoryEntry,
@@ -25,6 +26,7 @@ import {
   ScoreEvent,
   SharedFileDoc,
   SharedFolderDoc,
+  SupportTicketDoc,
   TaskDoc,
   UserPrivate,
   ViewId,
@@ -42,34 +44,41 @@ import {
   clockInToday,
   clockOutToday,
   correctAttendanceRecord,
+  createCalendarTodo,
   createCustomRole,
   createSharedFileRecord,
   createSharedFolderRecord,
   createTask,
+  deleteCalendarTodo,
   deleteSharedFileRecord,
   deleteSharedFolderRecord,
   deleteTaskRecord,
+  fetchLoginSlotVersion,
   findDirectoryByAuthUid,
+  getDirectoryEntryByEmpId,
   getDirectoryList,
   getUserPrivateRecord,
   logAuditEvent,
+  markAllNotificationsRead,
   markNotificationRead,
   removeHolidayRecord,
+  resetOrganizationData,
   saveAttendanceSettings,
   saveWorkflowPathTemplate,
   seedOrganizationDataIfNeeded,
   sendBackTask,
   subscribeAuditLog,
   subscribeOrgData,
+  syncAllAuthBindingSlots,
   syncDailyRecurringTasks,
   toggleBreakToday,
+  updateCalendarTodo,
   updateOwnPhoto,
   updateOwnProfile,
   updateRoleRecord,
   updateSharedFileRecord,
   updateSharedFolderRecord,
   updateTaskDetails,
-  verifyUserCredentials,
 } from './services/firestoreService';
 import { connectCompanyDriveOnServer, fetchCompanyDriveStatus } from './services/driveService';
 import { todayStr } from './utils/crypto';
@@ -89,6 +98,8 @@ import { UsersView } from './components/UsersView';
 import { ProfileView } from './components/ProfileView';
 import { LogView } from './components/LogView';
 import { BlueprintView } from './components/BlueprintView';
+import { LoadingScreen } from './components/LoadingScreen';
+import { TicketsView } from './components/TicketsView';
 
 const DEFAULT_SETTINGS: AttendanceSettings = {
   settingId: 'attendance',
@@ -126,8 +137,11 @@ function KejminOpsApp() {
   const [notifications, setNotifications] = useState<NotificationDoc[]>([]);
   const [sharedFolders, setSharedFolders] = useState<SharedFolderDoc[]>([]);
   const [sharedFiles, setSharedFiles] = useState<SharedFileDoc[]>([]);
+  const [calendarTodos, setCalendarTodos] = useState<CalendarTodo[]>([]);
+  const [supportTickets, setSupportTickets] = useState<SupportTicketDoc[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [myPrivate, setMyPrivate] = useState<UserPrivate | null>(null);
+  const [boundEmpIds, setBoundEmpIds] = useState<string[] | null>(null);
 
   const [activeView, setActiveView] = useState<ViewId>('dash');
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -146,13 +160,28 @@ function KejminOpsApp() {
   // Firebase Auth listener
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
-      setFirebaseUser(user);
       if (user) {
         try {
           await seedOrganizationDataIfNeeded(user);
+          setFirebaseUser(user);
         } catch (e) {
-          console.error('Seeding check failed:', e);
+          const msg = e instanceof Error ? e.message : String(e);
+          if (msg.includes('permission-denied') || msg.includes('Missing or insufficient permissions')) {
+            await signOut(auth).catch(() => {});
+            try {
+              localStorage.removeItem('kj');
+            } catch {
+              // ignore
+            }
+            setActiveEmpId(null);
+            setFirebaseUser(null);
+          } else {
+            console.error('Seeding check failed:', e);
+            setFirebaseUser(user);
+          }
         }
+      } else {
+        setFirebaseUser(null);
       }
       setAuthReady(true);
     });
@@ -166,17 +195,21 @@ function KejminOpsApp() {
 
   // Attach Firestore real-time listeners once Firebase Auth is ready & signed in
   useEffect(() => {
-    if (!authReady || !firebaseUser) {
-      setDirectory([]);
-      setRoles([]);
-      setTasks([]);
-      setScoreEvents([]);
-      setAttendance([]);
-      setHolidays([]);
-      setNotifications([]);
-      setSharedFolders([]);
-      setSharedFiles([]);
-      setAuditLogs([]);
+    if (!authReady || !firebaseUser || authBusy) {
+      if (!firebaseUser) {
+        setDirectory([]);
+        setRoles([]);
+        setTasks([]);
+        setScoreEvents([]);
+        setAttendance([]);
+        setHolidays([]);
+        setNotifications([]);
+        setSharedFolders([]);
+        setSharedFiles([]);
+        setCalendarTodos([]);
+        setSupportTickets([]);
+        setAuditLogs([]);
+      }
       return;
     }
 
@@ -197,17 +230,34 @@ function KejminOpsApp() {
         onNotifications: setNotifications,
         onSharedFolders: setSharedFolders,
         onSharedFiles: setSharedFiles,
+        onCalendarTodos: setCalendarTodos,
+        onSupportTickets: setSupportTickets,
       },
       false
     );
     return () => unsub();
-  }, [authReady, firebaseUser]);
+  }, [authReady, firebaseUser, authBusy]);
 
-  // Active KEJMIN OPS employee profile
+  // Active KEJMIN OPS employee profile (falls back to matching authUid if localStorage was cleared)
   const me = useMemo(() => {
-    if (!firebaseUser || !activeEmpId) return null;
-    return directory.find((d) => d.empId === activeEmpId && d.active) || null;
+    if (!firebaseUser) return null;
+    if (activeEmpId) {
+      const byId = directory.find((d) => d.empId === activeEmpId && d.active);
+      if (byId) return byId;
+    }
+    return directory.find((d) => d.authUid === firebaseUser.uid && d.active) || null;
   }, [firebaseUser, activeEmpId, directory]);
+
+  useEffect(() => {
+    if (me && activeEmpId !== me.empId) {
+      setActiveEmpId(me.empId);
+      try {
+        localStorage.setItem('kj', me.empId);
+      } catch {
+        // ignore
+      }
+    }
+  }, [me, activeEmpId]);
 
   // Load private record (phone/2FA) for active user when available
   useEffect(() => {
@@ -252,45 +302,97 @@ function KejminOpsApp() {
   };
 
   const handleSignIn = async (empId: string, password: string): Promise<string | null> => {
+    const cleanId = empId.trim().toLowerCase();
+    if (!cleanId || !password) {
+      return 'Please enter your User ID and password.';
+    }
+    if (!/^[a-z0-9._]{3,20}$/.test(cleanId)) {
+      return 'Incorrect user ID or password.';
+    }
+
     setAuthBusy(true);
     try {
-      const fbUser = await ensureFirebaseAuth();
-      if (!fbUser) return 'Firebase authentication was cancelled.';
+      const serverVersion = await fetchLoginSlotVersion(cleanId);
+      const versionsToTry =
+        serverVersion === 1 ? [1, 2, 3] : [serverVersion, serverVersion + 1];
 
-      const cleanId = empId.trim().toLowerCase();
-      const res = await verifyUserCredentials(cleanId, password);
-      if (!res.ok || !res.directory) {
-        await logAuditEvent({
-          actor: '(not signed in)',
-          actorUserId: cleanId,
-          category: 'Security',
-          action: `failed sign-in attempt with user ID "${cleanId}"`,
-          target: cleanId,
-        }).catch(() => {});
-        return res.reason || 'Incorrect user ID or password.';
+      let fbUser: User | null = null;
+      let lastAuthErr: unknown = null;
+      for (const v of versionsToTry) {
+        try {
+          fbUser = await signInEmployeeWithPassword(cleanId, password, v);
+          break;
+        } catch (err: unknown) {
+          lastAuthErr = err;
+          const code = (err as { code?: string })?.code || '';
+          if (
+            code === 'auth/invalid-credential' ||
+            code === 'auth/wrong-password' ||
+            code === 'auth/user-not-found'
+          ) {
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      if (!fbUser) {
+        throw lastAuthErr || new Error('Incorrect user ID or password.');
+      }
+
+      setFirebaseUser(fbUser);
+
+      // Confirm the signed-in Firebase UID matches an active KEJMIN OPS directory profile
+      let dir: DirectoryEntry | null = null;
+      try {
+        dir = await getDirectoryEntryByEmpId(cleanId);
+      } catch {
+        dir = null;
+      }
+
+      if (!dir || !dir.active || (dir.authUid && dir.authUid !== fbUser.uid)) {
+        await signOut(auth).catch(() => {});
+        setFirebaseUser(null);
+        return !dir
+          ? 'This account is no longer active. Contact an administrator.'
+          : !dir.active
+            ? 'This account has been deactivated.'
+            : 'Your password was recently reset. Please ask your administrator for the latest password.';
       }
 
       try {
-        localStorage.setItem('kj', res.directory.empId);
+        localStorage.setItem('kj', dir.empId);
       } catch {
         // ignore
       }
-      setActiveEmpId(res.directory.empId);
+      setActiveEmpId(dir.empId);
       setSignedOutBanner(false);
       setActiveView('dash');
       await logAuditEvent({
-        actor: res.directory.name,
-        actorUserId: res.directory.empId,
+        actor: dir.name,
+        actorUserId: dir.empId,
         category: 'Sign-in',
         action: 'signed in',
-        target: res.directory.empId,
-      });
+        target: dir.empId,
+      }).catch(() => {});
       return null;
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('popup-closed-by-user') || msg.includes('cancelled-popup-request')) {
-        return 'Google sign-in popup was closed before completing.';
+      const code = (err as { code?: string })?.code || '';
+      if (code === 'auth/operation-not-allowed') {
+        return 'Direct User ID sign-in is not enabled in Firebase Authentication yet. Ask the administrator to enable Email/Password sign-in in Firebase Console.';
       }
+      if (code === 'auth/too-many-requests') {
+        return 'Too many failed sign-in attempts. Please wait a few minutes and try again.';
+      }
+      if (
+        code === 'auth/invalid-credential' ||
+        code === 'auth/wrong-password' ||
+        code === 'auth/user-not-found' ||
+        code === 'auth/invalid-email'
+      ) {
+        return 'Incorrect user ID or password. Passwords are case-sensitive — check the exact password or reset it once in Users (after signing in with Google as Admin).';
+      }
+      const msg = err instanceof Error ? err.message : String(err);
       return msg || 'Sign-in failed.';
     } finally {
       setAuthBusy(false);
@@ -306,7 +408,11 @@ function KejminOpsApp() {
       let match = await findDirectoryByAuthUid(fbUser.uid);
       if (!match && fbUser.email?.toLowerCase() === BOOTSTRAP_ADMIN_EMAIL.toLowerCase()) {
         const list = await getDirectoryList();
-        match = list.find((d) => d.empId === 'developer') || null;
+        match =
+          list.find((d) => d.empId === 'developer' && d.active) ||
+          list.find((d) => isDeveloperRole(d.role) && d.active) ||
+          list.find((d) => d.active) ||
+          null;
       }
 
       if (!match) {
@@ -358,10 +464,7 @@ function KejminOpsApp() {
     setActiveEmpId(null);
     setSignedOutBanner(true);
     clearDriveAccessToken();
-    // Keep or clear Firebase auth session cleanly; if non-admin, sign out of Google too
-    if (!isBootstrapAdmin) {
-      await signOut(auth).catch(() => {});
-    }
+    await signOut(auth).catch(() => {});
   };
 
   // Derived permissions & lists
@@ -374,10 +477,11 @@ function KejminOpsApp() {
     [locationsDocs]
   );
 
-  const myRoleObj = useMemo(
-    () => (me ? roles.find((r) => r.name === me.role) || null : null),
-    [me, roles]
-  );
+  const myRoleObj = useMemo(() => {
+    if (!me) return null;
+    const target = me.role.trim().toLowerCase();
+    return roles.find((r) => r.name.trim().toLowerCase() === target) || null;
+  }, [me, roles]);
 
   const isDev = !!me && isDeveloperRole(me.role);
   const isAdmin = !!me && (isDev || me.role === 'Company Owner');
@@ -396,86 +500,60 @@ function KejminOpsApp() {
     return () => unsub();
   }, [authReady, firebaseUser, isBootstrapAdmin, isDev]);
 
-  // Keep Company Google Drive connected silently in the background for Developer sessions
-  // until the Developer explicitly clicks Disconnect.
+  // Keep server login-slot version cache synced whenever an Admin/Developer signs in
   useEffect(() => {
-    if (!authReady || !firebaseUser || (!isBootstrapAdmin && !isDev)) {
+    if (!authReady || !firebaseUser || (!isBootstrapAdmin && !isAdmin)) {
+      setBoundEmpIds(null);
       return;
     }
+    syncAllAuthBindingSlots()
+      .then(setBoundEmpIds)
+      .catch(() => {});
+  }, [authReady, firebaseUser, isBootstrapAdmin, isAdmin]);
 
-    let cancelled = false;
-    let inFlight = false;
-
-    const ensureCompanyDriveSession = async () => {
-      if (cancelled || inFlight) return;
-      inFlight = true;
-      try {
-        const status = await fetchCompanyDriveStatus();
-        if (cancelled || status.permanent || status.manuallyDisconnected) {
-          return;
-        }
-        const expiresSoon =
-          typeof status.expiresAt === 'number' &&
-          status.expiresAt - Date.now() < 15 * 60 * 1000;
-        if (status.connected && !expiresSoon) {
-          return;
-        }
-
-        const hint = status.hintEmail || status.accountLabel || firebaseUser.email;
-        const silentToken = await trySilentGoogleDriveToken(hint);
-        if (!silentToken || cancelled) {
-          return;
-        }
-
-        await connectCompanyDriveOnServer(
-          silentToken,
-          me?.name || firebaseUser.displayName || firebaseUser.email || 'Developer'
-        );
-        if (!cancelled) {
-          window.dispatchEvent(new Event('kejmin-drive-status-updated'));
-        }
-      } catch {
-        // Silent renewal failed quietly; user can still click Connect Company Drive manually
-      } finally {
-        inFlight = false;
-      }
-    };
-
-    void ensureCompanyDriveSession();
-    const interval = window.setInterval(() => {
-      void ensureCompanyDriveSession();
-    }, 3 * 60 * 1000);
-
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        void ensureCompanyDriveSession();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, [authReady, firebaseUser, isBootstrapAdmin, isDev, me?.name]);
-
-  const canSeeAll =
-    !!me &&
-    (isDev ||
-      ['Company Owner', 'Finalizer', 'Auditor'].includes(me.role) ||
-      myRolePermissions.includes(3));
-  const canSendBack =
-    !!me &&
-    (isDev ||
-      ['Company Owner', 'Finalizer', 'Auditor'].includes(me.role) ||
-      myRolePermissions.includes(2));
-  const canManageRoles =
-    !!me && (isDev || me.role === 'Company Owner' || myRolePermissions.includes(5));
-  const canManageUsers =
-    !!me && (isDev || me.role === 'Company Owner' || myRolePermissions.includes(6));
+  const canCreateTasks = !!me && (isDev || myRolePermissions.includes(0));
+  const canDesignPaths = !!me && (isDev || myRolePermissions.includes(1));
+  const canSendBack = !!me && (isDev || myRolePermissions.includes(2));
+  const canSeeAll = !!me && (isDev || myRolePermissions.includes(3));
+  const canExportReports = !!me && (isDev || myRolePermissions.includes(4));
+  const canManageRoles = !!me && (isDev || myRolePermissions.includes(5));
+  const canManageUsers = !!me && (isDev || myRolePermissions.includes(6));
   const canCorrectAttendance = !!me && (isDev || myRolePermissions.includes(7));
   const canDeleteTasks = !!me && (isDev || myRolePermissions.includes(8));
+  const canAccessShareFolder = !!me && (isDev || myRolePermissions.includes(9));
+
+  // If live role permissions are updated and revoke access to the active view, return to dashboard immediately
+  useEffect(() => {
+    if (!me || (!isDev && roles.length === 0)) return;
+    if (activeView === 'log' && !isDev) {
+      setActiveView('dash');
+    } else if (activeView === 'usr' && !canManageUsers) {
+      setActiveView('dash');
+    } else if (activeView === 'flow' && !canCreateTasks && !canDesignPaths) {
+      setActiveView('dash');
+    } else if (activeView === 'share' && !canAccessShareFolder) {
+      setActiveView('dash');
+    }
+  }, [
+    me,
+    isDev,
+    roles.length,
+    activeView,
+    canManageUsers,
+    canCreateTasks,
+    canDesignPaths,
+    canAccessShareFolder,
+  ]);
+
+  // Track calendar date rollover so daily tasks auto-open when a new day starts
+  const [todayKey, setTodayKey] = useState(() => todayStr());
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const next = todayStr();
+      setTodayKey((prev) => (prev === next ? prev : next));
+    }, 60 * 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   // Auto-run daily recurring tasks for today if today is not Sunday or a Holiday
   const lastDailySyncKeyRef = useRef('');
@@ -487,21 +565,55 @@ function KejminOpsApp() {
       .sort()
       .join('|');
     if (!dailySignature) return;
-    const syncKey = `${todayStr()}|${me.empId}|${holidays.length}|${dailySignature}`;
+    const syncKey = `${todayKey}|${me.empId}|${holidays.length}|${dailySignature}`;
     if (lastDailySyncKeyRef.current === syncKey) return;
     lastDailySyncKeyRef.current = syncKey;
     syncDailyRecurringTasks({ tasks, holidays, actor: me }).catch((err) => {
       console.error('Daily recurring task sync failed:', err);
     });
-  }, [authReady, firebaseUser, me, tasks, holidays]);
+  }, [authReady, firebaseUser, me, tasks, holidays, todayKey]);
 
   const myTasks = useMemo(() => {
     if (!me) return [];
-    const sorted = [...tasks].sort(
+    const seriesKeyOf = (t: TaskDoc) =>
+      t.repeatSeriesId || `${t.title.trim().toLowerCase()}|${t.branch}|${t.location}`;
+    const dailySeriesWithTodayRun = new Set(
+      tasks
+        .filter((t) => t.repeatMode === 'daily' && t.dueAt === todayKey)
+        .map(seriesKeyOf)
+    );
+    const visible = tasks.filter((t) => {
+      if (
+        t.repeatMode === 'daily' &&
+        t.status === 'open' &&
+        t.dueAt > todayKey &&
+        dailySeriesWithTodayRun.has(seriesKeyOf(t))
+      ) {
+        return false;
+      }
+      return true;
+    });
+    const sorted = [...visible].sort(
       (a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)
     );
     return canSeeAll ? sorted : sorted.filter((t) => t.path.includes(me.name));
-  }, [me, tasks, canSeeAll]);
+  }, [me, tasks, canSeeAll, todayKey]);
+
+  const waitingOnMeCount = useMemo(() => {
+    if (!me) return 0;
+    return myTasks.filter(
+      (t) =>
+        t.stage < t.path.length &&
+        t.status !== 'closed' &&
+        !(t.repeatMode === 'daily' && t.dueAt > todayKey) &&
+        t.path[t.stage] === me.name
+    ).length;
+  }, [me, myTasks, todayKey]);
+
+  const openTicketsCount = useMemo(
+    () => supportTickets.filter((t) => t.status !== 'closed').length,
+    [supportTickets]
+  );
 
   // Activity feed for Reports & Profile derived from real auditLog or recent scoreEvents
   const activityFeed = useMemo(() => {
@@ -537,25 +649,30 @@ function KejminOpsApp() {
       setActiveView('dash');
       return;
     }
+    if (v === 'flow' && !canCreateTasks && !canDesignPaths) {
+      showToast('Your role does not have permission to create tasks or design paths');
+      setActiveView('dash');
+      return;
+    }
+    if (v === 'share' && !canAccessShareFolder) {
+      showToast('Your role does not have access to Share Folder');
+      setActiveView('dash');
+      return;
+    }
     setActiveView(v);
+    try {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    } catch {
+      // ignore scroll errors
+    }
   };
 
   // Loading state while checking auth / syncing directory for remembered session
   if (!authReady || (firebaseUser && activeEmpId && !me && directory.length === 0)) {
     return (
-      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 20 }}>
-        <div className="glass sec" style={{ margin: 0, textAlign: 'center', minWidth: 260 }}>
-          <div className="logo" style={{ justifyContent: 'center' }}>
-            <div className="lg">KM</div>
-            <h1>
-              KEJMIN <b>OPS</b>
-            </h1>
-          </div>
-          <div className="sub" style={{ marginTop: 10 }}>
-            Connecting to Firebase Firestore...
-          </div>
-        </div>
-      </div>
+      <LoadingScreen
+        message={!authReady ? 'Starting KEJMIN OPS...' : 'Loading your workspace...'}
+      />
     );
   }
 
@@ -575,7 +692,12 @@ function KejminOpsApp() {
       <Sidebar
         me={me}
         canManageUsers={canManageUsers}
+        canCreateTasks={canCreateTasks}
+        canDesignPaths={canDesignPaths}
+        canAccessShareFolder={canAccessShareFolder}
         activeView={activeView}
+        waitingOnMeCount={waitingOnMeCount}
+        openTicketsCount={openTicketsCount}
         mobileOpen={mobileOpen}
         onCloseMobile={() => setMobileOpen(false)}
         onNavigate={handleNavigate}
@@ -585,12 +707,16 @@ function KejminOpsApp() {
       <main>
         <Topbar
           me={me}
+          activeView={activeView}
           mobileOpen={mobileOpen}
           notifications={notifications}
           onToggleMobile={() => setMobileOpen((o) => !o)}
           onNavigate={handleNavigate}
-          onMarkRead={(id) => {
-            markNotificationRead(id).catch(() => {});
+          onMarkRead={async (id) => {
+            await markNotificationRead(id).catch(() => {});
+          }}
+          onMarkAllRead={async (ids) => {
+            await markAllNotificationsRead(ids).catch(() => {});
           }}
         />
 
@@ -606,6 +732,7 @@ function KejminOpsApp() {
         {activeView === 'tasks' && (
           <TasksView
             me={me}
+            canCreateTasks={canCreateTasks}
             canSeeAll={canSeeAll}
             canSendBack={canSendBack}
             canDeleteTasks={canDeleteTasks}
@@ -620,7 +747,7 @@ function KejminOpsApp() {
               const res = await advanceTaskStage({ task, actor: me, directory, holidays });
               showToast(
                 res.nextScheduledDate
-                  ? `Stage completed, +${res.pts} pts · Next daily run: ${res.nextScheduledDate}`
+                  ? `Stage completed, +${res.pts} pts · Next daily run opens on ${res.nextScheduledDate}`
                   : `Stage completed, +${res.pts} points awarded`
               );
             }}
@@ -653,7 +780,7 @@ function KejminOpsApp() {
           />
         )}
 
-        {activeView === 'share' && (
+        {activeView === 'share' && canAccessShareFolder && (
           <ShareFolderView
             me={me}
             firebaseUid={firebaseUser.uid}
@@ -685,15 +812,20 @@ function KejminOpsApp() {
           />
         )}
 
-        {activeView === 'flow' && (
+        {activeView === 'flow' && (canCreateTasks || canDesignPaths) && (
           <WorkflowBuilderView
             directory={directory}
             branches={branches}
             locations={locations}
             holidays={holidays}
             paths={paths}
-            isAdmin={isAdmin}
+            canCreateTasks={canCreateTasks}
+            canDesignPaths={canDesignPaths}
             onCreateTask={async (params) => {
+              if (!canCreateTasks) {
+                showToast('Your role does not have permission to create tasks');
+                return;
+              }
               const created = await createTask({ ...params, holidays, actor: me });
               showToast(
                 params.repeatMode === 'daily'
@@ -703,6 +835,10 @@ function KejminOpsApp() {
               setActiveView('tasks');
             }}
             onSaveTemplate={async (name, stages) => {
+              if (!canDesignPaths) {
+                showToast('Your role does not have permission to design workflow paths');
+                return;
+              }
               await saveWorkflowPathTemplate({ name, stages, actor: me });
               showToast('Workflow template saved');
             }}
@@ -713,6 +849,18 @@ function KejminOpsApp() {
           <KpiView me={me} canSeeAll={canSeeAll} scoreEvents={scoreEvents} />
         )}
 
+        {activeView === 'tickets' && (
+          <TicketsView
+            me={me}
+            currentUid={firebaseUser.uid}
+            isDev={isDev}
+            isAdmin={isAdmin}
+            directory={directory}
+            tickets={supportTickets}
+            onToast={showToast}
+          />
+        )}
+
         {activeView === 'att' && (
           <AttendanceView
             me={me}
@@ -721,6 +869,7 @@ function KejminOpsApp() {
             isAdmin={isAdmin}
             directory={directory}
             attendance={attendance}
+            calendarTodos={calendarTodos}
             holidays={holidays}
             settings={settings}
             locations={locations}
@@ -752,6 +901,26 @@ function KejminOpsApp() {
               await removeHolidayRecord(holiday, me);
               showToast('Holiday removed');
             }}
+            onAddCalendarTodo={async (params) => {
+              await createCalendarTodo({ ...params, actor: me });
+              showToast('Sticky note to-do added');
+            }}
+            onUpdateCalendarTodo={async (params) => {
+              await updateCalendarTodo(params);
+            }}
+            onDeleteCalendarTodo={async (todoId) => {
+              await deleteCalendarTodo(todoId);
+              showToast('To-do removed');
+            }}
+            onExportAttendance={(meta) => {
+              logAuditEvent({
+                actor: me.name,
+                actorUserId: me.empId,
+                category: 'Export',
+                action: `exported attendance Excel · ${meta}`,
+              }).catch(() => {});
+              showToast('Attendance Excel downloaded');
+            }}
           />
         )}
 
@@ -759,6 +928,7 @@ function KejminOpsApp() {
           <ReportsView
             me={me}
             canSeeAll={canSeeAll}
+            canExportReports={canExportReports}
             directory={directory}
             branches={branches}
             locations={locations}
@@ -824,9 +994,11 @@ function KejminOpsApp() {
             branches={branches}
             locations={locations}
             tasks={tasks}
+            boundEmpIds={boundEmpIds}
             onCreateUser={async (params) => {
               await adminCreateUser({ ...params, actor: me });
-              showToast(`User @${params.empId} created`);
+              syncAllAuthBindingSlots().then(setBoundEmpIds).catch(() => {});
+              showToast(`User @${params.empId} created and direct login activated`);
             }}
             onUpdateUser={async (params) => {
               await adminUpdateUser({ ...params, tasks, directory, actor: me });
@@ -834,10 +1006,12 @@ function KejminOpsApp() {
             }}
             onResetPassword={async (target, newPassword) => {
               await adminResetPassword({ target, newPassword, actor: me });
-              showToast(`Password reset for ${target.name}`);
+              syncAllAuthBindingSlots().then(setBoundEmpIds).catch(() => {});
+              showToast(`Direct login activated / password saved for ${target.name}`);
             }}
             onDeleteUser={async (target) => {
               await adminDeleteUser({ target, directory, actor: me });
+              syncAllAuthBindingSlots().then(setBoundEmpIds).catch(() => {});
               showToast('User deleted');
             }}
           />
@@ -864,14 +1038,39 @@ function KejminOpsApp() {
             onRemovePhoto={async () => {
               await updateOwnPhoto(me, '');
             }}
-            onChangePassword={async (currentPassword, newPassword) =>
-              changeOwnPassword({ me, currentPassword, newPassword })
-            }
+            onChangePassword={async (currentPassword, newPassword) => {
+              const res = await changeOwnPassword({ me, currentPassword, newPassword });
+              if (res.ok && (isBootstrapAdmin || isAdmin)) {
+                syncAllAuthBindingSlots().then(setBoundEmpIds).catch(() => {});
+              }
+              return res;
+            }}
             onToast={showToast}
           />
         )}
 
-        {activeView === 'log' && isDev && <LogView me={me} auditLogs={auditLogs} />}
+        {activeView === 'log' && isDev && (
+          <LogView
+            me={me}
+            auditLogs={auditLogs}
+            counts={{
+              tasks: tasks.length,
+              kpi: scoreEvents.length,
+              attendance: attendance.length,
+              logs: auditLogs.length,
+            }}
+            onResetData={async (scope) => {
+              const res = await resetOrganizationData({ scope, actor: me });
+              const doneParts: string[] = [];
+              if (scope.resetTasks) doneParts.push(`Tasks (${res.deletedTasks})`);
+              if (scope.resetKpi) doneParts.push(`KPI (${res.deletedKpi})`);
+              if (scope.resetAttendance) doneParts.push(`Attendance (${res.deletedAttendance})`);
+              if (scope.resetLogs) doneParts.push(`Log (${res.deletedLogs})`);
+              showToast(`Reset complete: ${doneParts.join(', ')} cleared to 0`);
+              return res;
+            }}
+          />
+        )}
 
         {activeView === 'blue' && <BlueprintView />}
       </main>

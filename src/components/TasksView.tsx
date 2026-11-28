@@ -4,6 +4,7 @@ import { findHoliday, initialsOf, isSundayDate, nextDailyRunDate, nowTimeStr, to
 
 interface TasksViewProps {
   me: DirectoryEntry;
+  canCreateTasks: boolean;
   canSeeAll: boolean;
   canSendBack: boolean;
   canDeleteTasks: boolean;
@@ -36,6 +37,7 @@ type SortMode = 'due' | 'imp' | 'new';
 
 export const TasksView: React.FC<TasksViewProps> = ({
   me,
+  canCreateTasks,
   canSeeAll,
   canSendBack,
   canDeleteTasks,
@@ -107,9 +109,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
   );
 
   const isOpen = (t: TaskDoc) => t.stage < t.path.length && t.status !== 'closed';
+  const isFutureDaily = (t: TaskDoc) => isOpen(t) && t.repeatMode === 'daily' && t.dueAt > td;
   const isOver = (t: TaskDoc) =>
     isOpen(t) && (t.dueAt < td || (t.dueAt === td && Boolean(t.dueTime) && nowHm > (t.dueTime || '')));
-  const isMineTurn = (t: TaskDoc) => isOpen(t) && t.path[t.stage] === me.name;
+  const isMineTurn = (t: TaskDoc) => isOpen(t) && !isFutureDaily(t) && t.path[t.stage] === me.name;
   const canEditTask = (t: TaskDoc) => isAdmin || (isOpen(t) && t.createdBy === me.name);
   const canDeleteTask = () => canDeleteTasks;
 
@@ -186,6 +189,14 @@ export const TasksView: React.FC<TasksViewProps> = ({
         return <span className="tk-due late">Overdue (due {t.dueTime})</span>;
       }
       return <span className="tk-due warn">Due today{timeSuffix}</span>;
+    }
+    if (t.repeatMode === 'daily' && d > 0) {
+      return (
+        <span className="tk-due">
+          Scheduled for {t.dueAt}
+          {timeSuffix}
+        </span>
+      );
     }
     return (
       <span className="tk-due">
@@ -330,11 +341,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   const renderCard = (t: TaskDoc, board: boolean) => {
     const open = isOpen(t);
+    const futureDaily = isFutureDaily(t);
     const mineTurn = isMineTurn(t);
     const over = isOver(t);
     const pct = Math.round((Math.min(t.stage, t.path.length) / t.path.length) * 100);
-    const canMarkDone = open && (t.path[t.stage] === me.name || canSeeAll);
-    const showSendBack = open && t.stage > 0 && canSendBack;
+    const canMarkDone = open && !futureDaily && (t.path[t.stage] === me.name || canSeeAll);
+    const showSendBack = open && !futureDaily && t.stage > 0 && canSendBack;
     const editable = canEditTask(t);
     const deletable = canDeleteTask();
     const isBusy = busyTaskId === t.taskId;
@@ -509,9 +521,11 @@ export const TasksView: React.FC<TasksViewProps> = ({
             {canSeeAll ? ' · all branches' : ' · tasks you are on the path for'}
           </div>
         </div>
-        <button className="btn" id="tk-new" type="button" onClick={() => onNavigate('flow')}>
-          + New task
-        </button>
+        {canCreateTasks && (
+          <button className="btn" id="tk-new" type="button" onClick={() => onNavigate('flow')}>
+            + New task
+          </button>
+        )}
       </div>
 
       <div className="tk-tabs" id="tk-tabs">
@@ -608,7 +622,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
             <div className="sub" style={{ marginTop: 6 }}>
               {myTasks.length
                 ? 'Clear the search or choose another tab.'
-                : 'Create one from the Workflow builder.'}
+                : canCreateTasks
+                ? 'Create one from the Workflow builder.'
+                : 'Tasks assigned to you will appear here.'}
             </div>
           </div>
         ) : viewMode === 'board' ? (

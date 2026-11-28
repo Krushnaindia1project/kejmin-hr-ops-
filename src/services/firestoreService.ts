@@ -14,13 +14,21 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { auth, db, handleFirestoreError, OperationType } from '../firebase';
+import {
+  auth,
+  db,
+  handleFirestoreError,
+  OperationType,
+  provisionEmployeeAuthAccount,
+  updateOwnFirebasePassword,
+} from '../firebase';
 import {
   AttendanceRecord,
   AttendanceSettings,
   AuditCategory,
   AuditLogEntry,
   BOOTSTRAP_ADMIN_EMAIL,
+  CalendarTodo,
   canManageTargetRole,
   canManageUser,
   DirectoryEntry,
@@ -36,7 +44,15 @@ import {
   ShareAccessScope,
   SharedFileDoc,
   SharedFolderDoc,
+  SupportTicketDoc,
   TaskDoc,
+  TicketAttachmentCategory,
+  TicketAttachmentDoc,
+  TicketComment,
+  TicketLogEntry,
+  TicketStatus,
+  TicketSubtask,
+  TodoNoteColor,
   UserPrivate,
   WEIGHTS,
   WorkflowPath,
@@ -68,6 +84,8 @@ export interface OrgSubscriptions {
   onNotifications: (items: NotificationDoc[]) => void;
   onSharedFolders?: (items: SharedFolderDoc[]) => void;
   onSharedFiles?: (items: SharedFileDoc[]) => void;
+  onCalendarTodos?: (items: CalendarTodo[]) => void;
+  onSupportTickets?: (items: SupportTicketDoc[]) => void;
   onAuditLog?: (items: AuditLogEntry[]) => void;
 }
 
@@ -111,6 +129,12 @@ export function subscribeOrgData(
   }
   if (subs.onSharedFiles) {
     subCol<SharedFileDoc>('sharedFiles', subs.onSharedFiles);
+  }
+  if (subs.onCalendarTodos) {
+    subCol<CalendarTodo>('calendarTodos', subs.onCalendarTodos);
+  }
+  if (subs.onSupportTickets) {
+    subCol<SupportTicketDoc>('supportTickets', subs.onSupportTickets);
   }
 
   const settingsRef = doc(db, 'settings', 'attendance');
@@ -217,6 +241,24 @@ export async function markNotificationRead(notifId: string): Promise<void> {
     await updateDoc(doc(db, 'notifications', notifId), { read: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function markAllNotificationsRead(notifIds: string[]): Promise<void> {
+  const uniqueIds = Array.from(new Set(notifIds.filter(Boolean)));
+  if (uniqueIds.length === 0) return;
+  const CHUNK_SIZE = 400;
+  for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach((id) => {
+      batch.update(doc(db, 'notifications', id), { read: true });
+    });
+    try {
+      await batch.commit();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'notifications');
+    }
   }
 }
 
@@ -456,12 +498,12 @@ export async function seedOrganizationDataIfNeeded(firebaseUser: User): Promise<
 
   // 5. Built-in Roles
   const rolesData = [
-    { roleId: 'role_developer', name: 'Developer', branchScope: 'All', locationScope: 'All', permissions: [0, 1, 2, 3, 4, 5, 6, 7, 8], builtin: true },
-    { roleId: 'role_owner', name: 'Company Owner', branchScope: 'All', locationScope: 'All', permissions: [0, 1, 2, 3, 4, 5, 7, 8], builtin: true },
-    { roleId: 'role_finalizer', name: 'Finalizer', branchScope: 'All', locationScope: 'Bengaluru Office', permissions: [0, 2, 3, 4], builtin: true },
-    { roleId: 'role_auditor', name: 'Auditor', branchScope: 'All', locationScope: 'Bengaluru Office', permissions: [2, 3, 4], builtin: true },
-    { roleId: 'role_coordinator', name: 'Process Coordinator', branchScope: 'Own branch', locationScope: 'Bengaluru Office', permissions: [0], builtin: true },
-    { roleId: 'role_plant', name: 'Plant Staff', branchScope: 'Plant Coordination', locationScope: 'Plant 1, Plant 2', permissions: [0], builtin: true },
+    { roleId: 'role_developer', name: 'Developer', branchScope: 'All', locationScope: 'All', permissions: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], builtin: true },
+    { roleId: 'role_owner', name: 'Company Owner', branchScope: 'All', locationScope: 'All', permissions: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], builtin: true },
+    { roleId: 'role_finalizer', name: 'Finalizer', branchScope: 'All', locationScope: 'Bengaluru Office', permissions: [0, 2, 3, 4, 9], builtin: true },
+    { roleId: 'role_auditor', name: 'Auditor', branchScope: 'All', locationScope: 'Bengaluru Office', permissions: [2, 3, 4, 9], builtin: true },
+    { roleId: 'role_coordinator', name: 'Process Coordinator', branchScope: 'Own branch', locationScope: 'Bengaluru Office', permissions: [0, 9], builtin: true },
+    { roleId: 'role_plant', name: 'Plant Staff', branchScope: 'Plant Coordination', locationScope: 'Plant 1, Plant 2', permissions: [0, 9], builtin: true },
   ];
   rolesData.forEach((r) => {
     batch1.set(doc(db, 'roles', r.roleId), {
@@ -565,6 +607,97 @@ export async function getDirectoryList(): Promise<DirectoryEntry[]> {
     return snap.docs.map((d) => d.data() as DirectoryEntry);
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'directory');
+  }
+}
+
+export async function getDirectoryEntryByEmpId(empId: string): Promise<DirectoryEntry | null> {
+  const docId = safeDocId(empId);
+  try {
+    const snap = await getDoc(doc(db, 'directory', docId));
+    return snap.exists() ? (snap.data() as DirectoryEntry) : null;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `directory/${docId}`);
+  }
+}
+
+export async function fetchLoginSlotVersion(empId: string): Promise<number> {
+  try {
+    const res = await fetch('/api/auth/login-slot', {
+      method: 'POST',
+      credentials: 'include',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ empId: empId.trim().toLowerCase() }),
+    });
+    if (!res.ok) return 1;
+    const data = (await res.json()) as { version?: number };
+    return typeof data.version === 'number' && Number.isInteger(data.version) && data.version >= 1
+      ? data.version
+      : 1;
+  } catch {
+    return 1;
+  }
+}
+
+export async function syncLoginSlotsToServer(
+  slots: Record<string, number>,
+  replaceAll = false
+): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    const idToken = await user.getIdToken();
+    await fetch('/api/auth/sync-slots', {
+      method: 'POST',
+      credentials: 'include',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ slots, replaceAll }),
+    });
+  } catch {
+    // Non-fatal; next admin session will re-sync
+  }
+}
+
+export async function syncAllAuthBindingSlots(): Promise<string[]> {
+  if (!auth.currentUser) return [];
+  try {
+    const q = query(collection(db, 'authBindings'), where('orgId', '==', ORG_ID));
+    const snap = await getDocs(q);
+    const slots: Record<string, number> = {};
+    const boundEmpIds = new Set<string>();
+    snap.docs.forEach((d) => {
+      const data = d.data() as {
+        empId?: string;
+        docId?: string;
+        active?: boolean;
+        loginVersion?: number;
+      };
+      if (
+        data.active &&
+        typeof data.docId === 'string' &&
+        typeof data.loginVersion === 'number' &&
+        Number.isInteger(data.loginVersion) &&
+        data.loginVersion >= 1
+      ) {
+        if (typeof data.empId === 'string' && data.empId) {
+          boundEmpIds.add(data.empId);
+        }
+        const prev = slots[data.docId] || 0;
+        if (data.loginVersion > prev) {
+          slots[data.docId] = data.loginVersion;
+        }
+      }
+    });
+    await syncLoginSlotsToServer(slots, true);
+    return Array.from(boundEmpIds);
+  } catch {
+    // Non-admins do not have list permission on authBindings; silently ignore
+    return [];
   }
 }
 
@@ -901,6 +1034,9 @@ export async function advanceTaskStage(params: {
   const assigneeName = task.path[stageIdx];
   const assigneeDir = directory.find((d) => d.name === assigneeName);
   const today = todayStr();
+  if (task.repeatMode === 'daily' && task.dueAt > today) {
+    throw new Error(`This daily task is scheduled for ${task.dueAt} and opens on that day.`);
+  }
   const early =
     task.dueAt > today ||
     (task.dueAt === today && (!task.dueTime || nowTimeStr() <= task.dueTime));
@@ -963,14 +1099,16 @@ export async function advanceTaskStage(params: {
   } else if (nextStatus === 'closed' && task.repeatMode === 'daily') {
     const anchor = task.dueAt >= today ? task.dueAt : today;
     const nextDate = nextDailyRunDate(anchor, task.location, holidays, false);
-    const createdId = await spawnDailyOccurrenceIfMissing({
-      sourceTask: task,
-      targetDate: nextDate,
-      actor,
-    });
-    if (createdId) {
-      nextScheduledDate = nextDate;
+    // Do NOT create a future day's daily task on the same day — syncDailyRecurringTasks
+    // will automatically create the next occurrence when that calendar day arrives.
+    if (task.dueAt < today && isDailyRunDate(today, task.location, holidays)) {
+      await spawnDailyOccurrenceIfMissing({
+        sourceTask: task,
+        targetDate: today,
+        actor,
+      });
     }
+    nextScheduledDate = nextDate;
   }
 
   return { pts, nextScheduledDate };
@@ -1483,6 +1621,14 @@ export async function createCustomRole(params: {
     }
   }
 
+  const cleanPerms = Array.from(
+    new Set(
+      params.permissions.filter(
+        (p) => Number.isInteger(p) && p >= 0 && p < PERMISSIONS.length
+      )
+    )
+  ).sort((a, b) => a - b);
+
   const roleId = randomId('role');
   try {
     await setDoc(doc(db, 'roles', roleId), {
@@ -1490,7 +1636,7 @@ export async function createCustomRole(params: {
       name: cleanName,
       branchScope: params.branchScope.slice(0, 80),
       locationScope: params.locationScope.slice(0, 80),
-      permissions: params.permissions.slice(0, PERMISSIONS.length),
+      permissions: cleanPerms,
       builtin: false,
       orgId: ORG_ID,
       createdAt: serverTimestamp(),
@@ -1535,12 +1681,18 @@ export async function updateRoleRecord(params: {
     }
   }
 
+  const cleanPerms = Array.from(
+    new Set(
+      permissions.filter((p) => Number.isInteger(p) && p >= 0 && p < PERMISSIONS.length)
+    )
+  ).sort((a, b) => a - b);
+
   const batch = writeBatch(db);
   batch.update(doc(db, 'roles', role.roleId), {
     name: newName.slice(0, 60),
     branchScope: branchScope.slice(0, 80),
     locationScope: locationScope.slice(0, 80),
-    permissions: permissions.slice(0, PERMISSIONS.length),
+    permissions: cleanPerms,
     updatedAt: serverTimestamp(),
   });
 
@@ -1587,6 +1739,8 @@ export async function adminCreateUser(params: {
 
   const empId = params.empId.trim().toLowerCase();
   const docId = safeDocId(empId);
+  const provisioned = await provisionEmployeeAuthAccount(empId, params.password, 1);
+
   const salt = generateSalt();
   const passwordHash = await hashPassword(params.password, salt);
   const batch = writeBatch(db);
@@ -1602,7 +1756,7 @@ export async function adminCreateUser(params: {
     joinedAt: todayStr(),
     photoUrl: '',
     active: true,
-    authUid: '',
+    authUid: provisioned.uid,
     orgId: ORG_ID,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -1611,8 +1765,8 @@ export async function adminCreateUser(params: {
   batch.set(doc(db, 'users', docId), {
     empId,
     docId,
-    authUid: '',
-    email: `${empId}@kejmin.in`,
+    authUid: provisioned.uid,
+    email: provisioned.email,
     phone: '',
     passwordHash,
     passwordSalt: salt,
@@ -1622,11 +1776,37 @@ export async function adminCreateUser(params: {
     updatedAt: serverTimestamp(),
   });
 
+  batch.set(doc(db, 'authBindings', provisioned.uid), {
+    uid: provisioned.uid,
+    empId,
+    docId,
+    role: params.role.slice(0, 60),
+    active: true,
+    loginVersion: provisioned.loginVersion,
+    orgId: ORG_ID,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  if (
+    isDeveloperRole(params.actor.role) &&
+    (params.role === 'Developer' || params.role === 'Company Owner')
+  ) {
+    batch.set(doc(db, 'admins', provisioned.uid), {
+      uid: provisioned.uid,
+      email: provisioned.email.slice(0, 200),
+      role: params.role,
+      createdAt: serverTimestamp(),
+    });
+  }
+
   try {
     await batch.commit();
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, `directory/${docId}`);
   }
+
+  await syncLoginSlotsToServer({ [docId]: provisioned.loginVersion });
 
   await logAuditEvent({
     actor: params.actor.name,
@@ -1674,7 +1854,19 @@ export async function adminUpdateUser(params: {
     updatedAt: serverTimestamp(),
   });
 
-  // Keep /admins/{authUid} in sync when Developer promotes/demotes a Google-linked user
+  // Keep /authBindings/{authUid} role in sync if this user has a bound password login
+  if (target.authUid && role !== target.role) {
+    const bindingRef = doc(db, 'authBindings', target.authUid);
+    const bindingSnap = await getDoc(bindingRef).catch(() => null);
+    if (bindingSnap?.exists()) {
+      batch.update(bindingRef, {
+        role: role.slice(0, 60),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  }
+
+  // Keep /admins/{authUid} in sync when Developer promotes/demotes a linked user
   if (isDeveloperRole(actor.role) && target.authUid && role !== target.role) {
     const isNextAdmin = role === 'Developer' || role === 'Company Owner';
     const wasAdmin = target.role === 'Developer' || target.role === 'Company Owner';
@@ -1741,17 +1933,84 @@ export async function adminResetPassword(params: {
     throw new Error('You can only reset passwords for users strictly lower than your own role.');
   }
 
+  const oldUid = params.target.authUid || '';
+  let currentVersion = 0;
+  let hadOldBinding = false;
+  if (oldUid) {
+    const oldBindSnap = await getDoc(doc(db, 'authBindings', oldUid)).catch(() => null);
+    if (oldBindSnap?.exists()) {
+      hadOldBinding = true;
+      const v = Number(oldBindSnap.data()?.loginVersion);
+      if (Number.isInteger(v) && v >= 1) {
+        currentVersion = v;
+      }
+    }
+  }
+
+  const provisioned = await provisionEmployeeAuthAccount(
+    params.target.empId,
+    params.newPassword,
+    currentVersion + 1
+  );
+
   const salt = generateSalt();
   const passwordHash = await hashPassword(params.newPassword, salt);
-  try {
-    await updateDoc(doc(db, 'users', params.target.docId), {
-      passwordHash,
-      passwordSalt: salt,
-      updatedAt: serverTimestamp(),
+  const batch = writeBatch(db);
+
+  batch.update(doc(db, 'directory', params.target.docId), {
+    authUid: provisioned.uid,
+    updatedAt: serverTimestamp(),
+  });
+
+  batch.update(doc(db, 'users', params.target.docId), {
+    authUid: provisioned.uid,
+    email: provisioned.email,
+    passwordHash,
+    passwordSalt: salt,
+    updatedAt: serverTimestamp(),
+  });
+
+  batch.set(doc(db, 'authBindings', provisioned.uid), {
+    uid: provisioned.uid,
+    empId: params.target.empId,
+    docId: params.target.docId,
+    role: params.target.role.slice(0, 60),
+    active: params.target.active,
+    loginVersion: provisioned.loginVersion,
+    orgId: ORG_ID,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  if (hadOldBinding && oldUid && oldUid !== provisioned.uid) {
+    batch.delete(doc(db, 'authBindings', oldUid));
+  }
+
+  if (
+    isDeveloperRole(params.actor.role) &&
+    (params.target.role === 'Developer' || params.target.role === 'Company Owner')
+  ) {
+    batch.set(doc(db, 'admins', provisioned.uid), {
+      uid: provisioned.uid,
+      email: provisioned.email.slice(0, 200),
+      role: params.target.role,
+      createdAt: serverTimestamp(),
     });
+    if (oldUid && oldUid !== provisioned.uid && oldUid !== auth.currentUser?.uid) {
+      const oldAdmSnap = await getDoc(doc(db, 'admins', oldUid)).catch(() => null);
+      if (oldAdmSnap?.exists()) {
+        batch.delete(doc(db, 'admins', oldUid));
+      }
+    }
+  }
+
+  try {
+    await batch.commit();
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `users/${params.target.docId}`);
   }
+
+  await syncLoginSlotsToServer({ [params.target.docId]: provisioned.loginVersion });
 
   await logAuditEvent({
     actor: params.actor.name,
@@ -1783,6 +2042,14 @@ export async function adminDeleteUser(params: {
   const batch = writeBatch(db);
   batch.delete(doc(db, 'directory', params.target.docId));
   batch.delete(doc(db, 'users', params.target.docId));
+  if (params.target.authUid && params.target.authUid !== auth.currentUser?.uid) {
+    const bindingSnap = await getDoc(doc(db, 'authBindings', params.target.authUid)).catch(
+      () => null
+    );
+    if (bindingSnap?.exists()) {
+      batch.delete(doc(db, 'authBindings', params.target.authUid));
+    }
+  }
   if (
     isDeveloperRole(params.actor.role) &&
     params.target.authUid &&
@@ -1878,16 +2145,137 @@ export async function changeOwnPassword(params: {
   if (!matched) {
     return { ok: false, error: 'Current password is incorrect.' };
   }
-  const salt = generateSalt();
-  const passwordHash = await hashPassword(params.newPassword, salt);
-  try {
-    await updateDoc(doc(db, 'users', params.me.docId), {
+
+  const fbUser = auth.currentUser;
+  const usesPasswordProvider = !!fbUser?.providerData.some((p) => p.providerId === 'password');
+
+  if (usesPasswordProvider) {
+    try {
+      await updateOwnFirebasePassword(params.currentPassword, params.newPassword);
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code || '';
+      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+        return { ok: false, error: 'Current password is incorrect.' };
+      }
+      if (code === 'auth/weak-password') {
+        return { ok: false, error: 'New password must be at least 6 characters.' };
+      }
+      if (code === 'auth/requires-recent-login') {
+        return {
+          ok: false,
+          error: 'Please sign out and sign in again before changing your password.',
+        };
+      }
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Unable to update login password.',
+      };
+    }
+
+    const salt = generateSalt();
+    const passwordHash = await hashPassword(params.newPassword, salt);
+    try {
+      await updateDoc(doc(db, 'users', params.me.docId), {
+        passwordHash,
+        passwordSalt: salt,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${params.me.docId}`);
+    }
+  } else if (isDeveloperRole(params.me.role) || params.me.role === 'Company Owner') {
+    // Signed in via Google as Admin/Developer: provision/rotate the Email/Password binding so User ID + Password stays in sync
+    const oldUid = params.me.authUid || '';
+    let currentVersion = 0;
+    let hadOldBinding = false;
+    if (oldUid) {
+      const oldBindSnap = await getDoc(doc(db, 'authBindings', oldUid)).catch(() => null);
+      if (oldBindSnap?.exists()) {
+        hadOldBinding = true;
+        const v = Number(oldBindSnap.data()?.loginVersion);
+        if (Number.isInteger(v) && v >= 1) {
+          currentVersion = v;
+        }
+      }
+    }
+
+    let provisioned: { uid: string; email: string; loginVersion: number };
+    try {
+      provisioned = await provisionEmployeeAuthAccount(
+        params.me.empId,
+        params.newPassword,
+        currentVersion + 1
+      );
+    } catch (err: unknown) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Unable to update login password.',
+      };
+    }
+
+    const salt = generateSalt();
+    const passwordHash = await hashPassword(params.newPassword, salt);
+    const batch = writeBatch(db);
+
+    batch.update(doc(db, 'directory', params.me.docId), {
+      authUid: provisioned.uid,
+      updatedAt: serverTimestamp(),
+    });
+    batch.update(doc(db, 'users', params.me.docId), {
+      authUid: provisioned.uid,
+      email: provisioned.email,
       passwordHash,
       passwordSalt: salt,
       updatedAt: serverTimestamp(),
     });
-  } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `users/${params.me.docId}`);
+    batch.set(doc(db, 'authBindings', provisioned.uid), {
+      uid: provisioned.uid,
+      empId: params.me.empId,
+      docId: params.me.docId,
+      role: params.me.role.slice(0, 60),
+      active: params.me.active,
+      loginVersion: provisioned.loginVersion,
+      orgId: ORG_ID,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    if (hadOldBinding && oldUid && oldUid !== provisioned.uid) {
+      batch.delete(doc(db, 'authBindings', oldUid));
+    }
+    if (isDeveloperRole(params.me.role)) {
+      batch.set(doc(db, 'admins', provisioned.uid), {
+        uid: provisioned.uid,
+        email: provisioned.email.slice(0, 200),
+        role: params.me.role,
+        createdAt: serverTimestamp(),
+      });
+      if (oldUid && oldUid !== provisioned.uid && oldUid !== fbUser?.uid) {
+        const oldAdmSnap = await getDoc(doc(db, 'admins', oldUid)).catch(() => null);
+        if (oldAdmSnap?.exists()) {
+          batch.delete(doc(db, 'admins', oldUid));
+        }
+      }
+    }
+
+    try {
+      await batch.commit();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${params.me.docId}`);
+    }
+
+    await syncLoginSlotsToServer({ [params.me.docId]: provisioned.loginVersion });
+  } else {
+    const salt = generateSalt();
+    const passwordHash = await hashPassword(params.newPassword, salt);
+    try {
+      await updateDoc(doc(db, 'users', params.me.docId), {
+        passwordHash,
+        passwordSalt: salt,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${params.me.docId}`);
+    }
   }
 
   await logAuditEvent({
@@ -2182,3 +2570,577 @@ export async function deleteSharedFileRecord(params: {
     after: 'deleted',
   });
 }
+
+// ===== DEVELOPER DATA RESET (START FRESH FROM SCRATCH) =====
+
+export interface ResetDataScope {
+  resetTasks: boolean;
+  resetKpi: boolean;
+  resetAttendance: boolean;
+  resetLogs: boolean;
+}
+
+export interface ResetDataResult {
+  deletedTasks: number;
+  deletedNotifications: number;
+  deletedKpi: number;
+  deletedAttendance: number;
+  deletedLogs: number;
+}
+
+async function deleteCollectionRecords(collectionName: string): Promise<number> {
+  let snap;
+  try {
+    snap = await getDocs(query(collection(db, collectionName), where('orgId', '==', ORG_ID)));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, collectionName);
+    return 0;
+  }
+
+  const docs = snap.docs;
+  if (docs.length === 0) return 0;
+
+  const CHUNK_SIZE = 400;
+  for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+    const chunk = docs.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach((d) => batch.delete(d.ref));
+    try {
+      await batch.commit();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, collectionName);
+    }
+  }
+  return docs.length;
+}
+
+export async function resetOrganizationData(params: {
+  scope: ResetDataScope;
+  actor: DirectoryEntry;
+}): Promise<ResetDataResult> {
+  const { scope, actor } = params;
+  if (!isDeveloperRole(actor.role)) {
+    throw new Error('Only a Developer can reset organization data.');
+  }
+  if (!scope.resetTasks && !scope.resetKpi && !scope.resetAttendance && !scope.resetLogs) {
+    throw new Error('Select at least one data section to reset.');
+  }
+
+  const result: ResetDataResult = {
+    deletedTasks: 0,
+    deletedNotifications: 0,
+    deletedKpi: 0,
+    deletedAttendance: 0,
+    deletedLogs: 0,
+  };
+
+  const parts: string[] = [];
+
+  if (scope.resetTasks) {
+    result.deletedTasks = await deleteCollectionRecords('tasks');
+    result.deletedNotifications = await deleteCollectionRecords('notifications');
+    parts.push(`Tasks (${result.deletedTasks} tasks, ${result.deletedNotifications} alerts)`);
+  }
+
+  if (scope.resetKpi) {
+    result.deletedKpi = await deleteCollectionRecords('scoreEvents');
+    parts.push(`KPI points (${result.deletedKpi} score events → reset to 0)`);
+  }
+
+  if (scope.resetAttendance) {
+    result.deletedAttendance = await deleteCollectionRecords('attendance');
+    parts.push(`Attendance & report records (${result.deletedAttendance} records)`);
+  }
+
+  if (scope.resetLogs) {
+    result.deletedLogs = await deleteCollectionRecords('auditLog');
+    parts.push(`Activity log (${result.deletedLogs} previous entries)`);
+  }
+
+  await logAuditEvent({
+    actor: actor.name,
+    actorUserId: actor.empId,
+    category: 'Delete',
+    action: `reset data from scratch: ${parts.join(' · ')}`,
+    target: 'org_reset',
+    before: parts.join(', '),
+    after: 'reset to 0',
+  });
+
+  return result;
+}
+
+// ===== CALENDAR STICKY-NOTE TO-DO LIST =====
+
+export async function createCalendarTodo(params: {
+  date: string;
+  text: string;
+  color: TodoNoteColor;
+  actor: DirectoryEntry;
+}): Promise<string> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('Not authenticated');
+  const cleanText = params.text.trim().slice(0, 240);
+  if (!cleanText) throw new Error('Please enter a to-do item.');
+  const todoId = randomId('td');
+  const path = `calendarTodos/${todoId}`;
+  try {
+    await setDoc(doc(db, 'calendarTodos', todoId), {
+      todoId,
+      empId: params.actor.empId.slice(0, 32),
+      employeeName: params.actor.name.slice(0, 100),
+      date: params.date.slice(0, 10),
+      text: cleanText,
+      done: false,
+      color: params.color,
+      actorUid: uid,
+      orgId: ORG_ID,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+  return todoId;
+}
+
+export async function updateCalendarTodo(params: {
+  todo: CalendarTodo;
+  text?: string;
+  done?: boolean;
+  color?: TodoNoteColor;
+  date?: string;
+}): Promise<void> {
+  const payload: Record<string, unknown> = {
+    updatedAt: serverTimestamp(),
+  };
+  if (typeof params.text === 'string') {
+    const clean = params.text.trim().slice(0, 240);
+    if (!clean) throw new Error('To-do text cannot be empty.');
+    payload.text = clean;
+  }
+  if (typeof params.done === 'boolean') {
+    payload.done = params.done;
+  }
+  if (params.color) {
+    payload.color = params.color;
+  }
+  if (params.date) {
+    payload.date = params.date.slice(0, 10);
+  }
+  const path = `calendarTodos/${params.todo.todoId}`;
+  try {
+    await updateDoc(doc(db, 'calendarTodos', params.todo.todoId), payload);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function deleteCalendarTodo(todoId: string): Promise<void> {
+  const path = `calendarTodos/${todoId}`;
+  try {
+    await deleteDoc(doc(db, 'calendarTodos', todoId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// ===== SUPPORT TICKETS =====
+
+export interface PendingTicketAttachment {
+  name: string;
+  type: string;
+  size: number;
+  cat: TicketAttachmentCategory;
+  data: string;
+}
+
+function nowTicketTimestamp(): string {
+  return new Date().toLocaleString('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+}
+
+export function subscribeTicketAttachments(
+  ticketId: string,
+  onChange: (items: TicketAttachmentDoc[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, 'ticketAttachments'),
+    where('orgId', '==', ORG_ID),
+    where('ticketId', '==', ticketId)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const items = snap.docs
+        .map((d) => d.data() as TicketAttachmentDoc)
+        .sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
+      onChange(items);
+    },
+    (err) => {
+      handleFirestoreError(err, OperationType.LIST, `ticketAttachments?ticketId=${ticketId}`);
+    }
+  );
+}
+
+export async function fetchAllTicketAttachments(): Promise<TicketAttachmentDoc[]> {
+  try {
+    const q = query(collection(db, 'ticketAttachments'), where('orgId', '==', ORG_ID));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => d.data() as TicketAttachmentDoc);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'ticketAttachments');
+    return [];
+  }
+}
+
+export async function createSupportTicket(params: {
+  title: string;
+  desc: string;
+  type: string;
+  pri: Priority;
+  assignee: string;
+  incident: string;
+  labels: string[];
+  pendingAttachments: PendingTicketAttachment[];
+  nextTicketNumber: number;
+  actor: DirectoryEntry;
+}): Promise<{ ticketId: string; ticketNumber: number }> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('Not authenticated');
+
+  const cleanTitle = params.title.trim().slice(0, 160);
+  if (!cleanTitle) throw new Error('Summary is required.');
+  const cleanType = params.type.trim().slice(0, 30) || 'task';
+  const cleanLabels = params.labels
+    .map((l) => l.trim().slice(0, 40))
+    .filter(Boolean)
+    .slice(0, 20);
+  const cleanAttachments = params.pendingAttachments.slice(0, 20);
+  const ticketId = randomId('tkt');
+  const ticketNumber = Math.max(1, Math.min(999999, Math.floor(params.nextTicketNumber)));
+  const atStr = nowTicketTimestamp();
+
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'supportTickets', ticketId), {
+    ticketId,
+    ticketNumber,
+    title: cleanTitle,
+    desc: params.desc.slice(0, 4000),
+    type: cleanType,
+    pri: params.pri,
+    status: 'created' as TicketStatus,
+    assignee: params.assignee.trim().slice(0, 100),
+    reporter: params.actor.name.slice(0, 100),
+    reporterEmpId: params.actor.empId.slice(0, 32),
+    reporterUid: uid,
+    incident: params.incident.trim().slice(0, 25),
+    labels: cleanLabels,
+    subs: [] as TicketSubtask[],
+    comments: [] as TicketComment[],
+    log: [{ t: 'Ticket created', at: atStr }] as TicketLogEntry[],
+    attachmentCount: cleanAttachments.length,
+    orgId: ORG_ID,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  cleanAttachments.forEach((att) => {
+    const attachmentId = randomId('att');
+    batch.set(doc(db, 'ticketAttachments', attachmentId), {
+      attachmentId,
+      ticketId,
+      name: att.name.trim().slice(0, 200) || 'attachment',
+      type: att.type.trim().slice(0, 100) || 'application/octet-stream',
+      size: Math.max(0, Math.min(2097152, Math.round(att.size))),
+      cat: att.cat,
+      by: params.actor.name.slice(0, 100),
+      byUid: uid,
+      at: atStr.slice(0, 40),
+      data: att.data.slice(0, 800000),
+      orgId: ORG_ID,
+      createdAt: serverTimestamp(),
+    });
+  });
+
+  try {
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `supportTickets/${ticketId}`);
+  }
+
+  const key = `KEJ-${ticketNumber}`;
+  await logAuditEvent({
+    actor: params.actor.name,
+    actorUserId: params.actor.empId,
+    category: 'Ticket',
+    action: `created support ticket ${key} "${cleanTitle}" · ${cleanType} · ${params.pri} priority${params.assignee ? ` · assigned to ${params.assignee}` : ''}`,
+    target: ticketId,
+  }).catch(() => {});
+
+  if (params.assignee && params.assignee !== params.actor.name) {
+    await createNotification({
+      recipientName: params.assignee,
+      title: `Ticket assigned: ${key}`,
+      message: `${params.actor.name} assigned you ${key}: "${cleanTitle}" (${params.pri} priority).`,
+      type: 'assigned',
+      taskId: ticketId,
+    }).catch(() => {});
+  }
+
+  return { ticketId, ticketNumber };
+}
+
+export async function updateSupportTicket(params: {
+  ticket: SupportTicketDoc;
+  patch: Partial<
+    Pick<
+      SupportTicketDoc,
+      'title' | 'desc' | 'type' | 'pri' | 'status' | 'assignee' | 'incident' | 'labels' | 'subs' | 'comments' | 'attachmentCount'
+    >
+  >;
+  logMessage?: string;
+  actor: DirectoryEntry;
+}): Promise<void> {
+  const { ticket, patch, logMessage, actor } = params;
+  const payload: Record<string, unknown> = {
+    updatedAt: serverTimestamp(),
+  };
+
+  if (typeof patch.title === 'string') {
+    const clean = patch.title.trim().slice(0, 160);
+    if (!clean) throw new Error('Summary cannot be empty.');
+    payload.title = clean;
+  }
+  if (typeof patch.desc === 'string') {
+    payload.desc = patch.desc.slice(0, 4000);
+  }
+  if (typeof patch.type === 'string') {
+    payload.type = patch.type.trim().slice(0, 30) || 'task';
+  }
+  if (patch.pri) {
+    payload.pri = patch.pri;
+  }
+  if (patch.status) {
+    payload.status = patch.status;
+  }
+  if (typeof patch.assignee === 'string') {
+    payload.assignee = patch.assignee.trim().slice(0, 100);
+  }
+  if (typeof patch.incident === 'string') {
+    payload.incident = patch.incident.trim().slice(0, 25);
+  }
+  if (Array.isArray(patch.labels)) {
+    payload.labels = patch.labels.map((l) => l.trim().slice(0, 40)).filter(Boolean).slice(0, 20);
+  }
+  if (Array.isArray(patch.subs)) {
+    payload.subs = patch.subs.slice(0, 50);
+  }
+  if (Array.isArray(patch.comments)) {
+    payload.comments = patch.comments.slice(0, 100);
+  }
+  if (typeof patch.attachmentCount === 'number') {
+    payload.attachmentCount = Math.max(0, Math.min(50, Math.floor(patch.attachmentCount)));
+  }
+
+  if (logMessage) {
+    const nextLog: TicketLogEntry[] = [
+      { t: logMessage.slice(0, 300), at: nowTicketTimestamp() },
+      ...(ticket.log || []),
+    ].slice(0, 100);
+    payload.log = nextLog;
+  }
+
+  const path = `supportTickets/${ticket.ticketId}`;
+  try {
+    await updateDoc(doc(db, 'supportTickets', ticket.ticketId), payload);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+
+  const key = `KEJ-${ticket.ticketNumber}`;
+  if (logMessage) {
+    await logAuditEvent({
+      actor: actor.name,
+      actorUserId: actor.empId,
+      category: 'Ticket',
+      action: `updated ${key} "${ticket.title}" · ${logMessage}`,
+      target: ticket.ticketId,
+    }).catch(() => {});
+  }
+
+  if (
+    typeof patch.assignee === 'string' &&
+    patch.assignee &&
+    patch.assignee !== ticket.assignee &&
+    patch.assignee !== actor.name
+  ) {
+    await createNotification({
+      recipientName: patch.assignee,
+      title: `Ticket assigned: ${key}`,
+      message: `${actor.name} assigned you ${key}: "${patch.title || ticket.title}".`,
+      type: 'assigned',
+      taskId: ticket.ticketId,
+    }).catch(() => {});
+  }
+}
+
+export async function addTicketAttachments(params: {
+  ticket: SupportTicketDoc;
+  files: PendingTicketAttachment[];
+  actor: DirectoryEntry;
+}): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('Not authenticated');
+  const { ticket, files, actor } = params;
+  if (!files.length) return;
+
+  const atStr = nowTicketTimestamp();
+  const availableSlots = Math.max(0, 50 - (ticket.attachmentCount || 0));
+  const toSave = files.slice(0, availableSlots);
+  if (!toSave.length) {
+    throw new Error('Maximum of 50 attachments per ticket reached.');
+  }
+
+  const cat = toSave[0].cat;
+  const logMsg = `${toSave.length} file(s) added to ${cat}: ${toSave.map((x) => x.name).join(', ')}`.slice(0, 300);
+  const nextLog: TicketLogEntry[] = [{ t: logMsg, at: atStr }, ...(ticket.log || [])].slice(0, 100);
+
+  const batch = writeBatch(db);
+  toSave.forEach((att) => {
+    const attachmentId = randomId('att');
+    batch.set(doc(db, 'ticketAttachments', attachmentId), {
+      attachmentId,
+      ticketId: ticket.ticketId,
+      name: att.name.trim().slice(0, 200) || 'attachment',
+      type: att.type.trim().slice(0, 100) || 'application/octet-stream',
+      size: Math.max(0, Math.min(2097152, Math.round(att.size))),
+      cat: att.cat,
+      by: actor.name.slice(0, 100),
+      byUid: uid,
+      at: atStr.slice(0, 40),
+      data: att.data.slice(0, 800000),
+      orgId: ORG_ID,
+      createdAt: serverTimestamp(),
+    });
+  });
+
+  batch.update(doc(db, 'supportTickets', ticket.ticketId), {
+    attachmentCount: Math.min(50, (ticket.attachmentCount || 0) + toSave.length),
+    log: nextLog,
+    updatedAt: serverTimestamp(),
+  });
+
+  try {
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `ticketAttachments/${ticket.ticketId}`);
+  }
+
+  await logAuditEvent({
+    actor: actor.name,
+    actorUserId: actor.empId,
+    category: 'Upload',
+    action: `attached ${toSave.length} file(s) to KEJ-${ticket.ticketNumber} (${cat}): ${toSave.map((x) => x.name).join(', ')}`,
+    target: ticket.ticketId,
+  }).catch(() => {});
+}
+
+export async function removeTicketAttachment(params: {
+  ticket: SupportTicketDoc;
+  attachment: TicketAttachmentDoc;
+  actor: DirectoryEntry;
+}): Promise<void> {
+  const { ticket, attachment, actor } = params;
+  const atStr = nowTicketTimestamp();
+  const logMsg = `File removed from ${attachment.cat}: ${attachment.name}`.slice(0, 300);
+  const nextLog: TicketLogEntry[] = [{ t: logMsg, at: atStr }, ...(ticket.log || [])].slice(0, 100);
+
+  const batch = writeBatch(db);
+  batch.delete(doc(db, 'ticketAttachments', attachment.attachmentId));
+  batch.update(doc(db, 'supportTickets', ticket.ticketId), {
+    attachmentCount: Math.max(0, (ticket.attachmentCount || 1) - 1),
+    log: nextLog,
+    updatedAt: serverTimestamp(),
+  });
+
+  try {
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `ticketAttachments/${attachment.attachmentId}`);
+  }
+
+  await logAuditEvent({
+    actor: actor.name,
+    actorUserId: actor.empId,
+    category: 'Delete',
+    action: `removed attachment "${attachment.name}" from KEJ-${ticket.ticketNumber}`,
+    target: ticket.ticketId,
+  }).catch(() => {});
+}
+
+export async function deleteSupportTicket(params: {
+  ticket: SupportTicketDoc;
+  actor: DirectoryEntry;
+}): Promise<void> {
+  const { ticket, actor } = params;
+  // Delete linked attachments first while ticket still exists (for creator delete permission rule)
+  try {
+    const attSnap = await getDocs(
+      query(
+        collection(db, 'ticketAttachments'),
+        where('orgId', '==', ORG_ID),
+        where('ticketId', '==', ticket.ticketId)
+      )
+    );
+    if (attSnap.docs.length > 0) {
+      await commitDeletesInChunks(attSnap.docs.map((d) => d.ref));
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `ticketAttachments/${ticket.ticketId}`);
+  }
+
+  try {
+    await deleteDoc(doc(db, 'supportTickets', ticket.ticketId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `supportTickets/${ticket.ticketId}`);
+  }
+
+  await logAuditEvent({
+    actor: actor.name,
+    actorUserId: actor.empId,
+    category: 'Delete',
+    action: `deleted support ticket KEJ-${ticket.ticketNumber} "${ticket.title}"`,
+    target: ticket.ticketId,
+    before: `KEJ-${ticket.ticketNumber} (${ticket.status})`,
+    after: 'deleted',
+  }).catch(() => {});
+}
+
+export async function clearAllSupportTickets(actor: DirectoryEntry): Promise<{
+  deletedTickets: number;
+  deletedAttachments: number;
+}> {
+  if (!isDeveloperRole(actor.role)) {
+    throw new Error('Only a Developer can clear all support tickets.');
+  }
+  const deletedAttachments = await deleteCollectionRecords('ticketAttachments');
+  const deletedTickets = await deleteCollectionRecords('supportTickets');
+
+  await logAuditEvent({
+    actor: actor.name,
+    actorUserId: actor.empId,
+    category: 'Delete',
+    action: `cleared all support tickets (${deletedTickets} tickets, ${deletedAttachments} attachments)`,
+    target: 'support_tickets_clear_all',
+    before: `${deletedTickets} tickets`,
+    after: '0 tickets',
+  }).catch(() => {});
+
+  return { deletedTickets, deletedAttachments };
+}
+
+
+
